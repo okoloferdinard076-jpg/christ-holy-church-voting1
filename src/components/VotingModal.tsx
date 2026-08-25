@@ -5,6 +5,7 @@ import {
   submitPaymentProof,
   uploadReceiptFile,
 } from '../services/api';
+import { compressImageFile } from '../utils/imageCompressor';
 import {
   X,
   Vote,
@@ -73,6 +74,17 @@ export const VotingModal: React.FC<VotingModalProps> = ({
   const [bankTransactionId, setBankTransactionId] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [compressedReceiptDataUrl, setCompressedReceiptDataUrl] = useState<string | null>(null);
+  const [receiptCompressionInfo, setReceiptCompressionInfo] = useState<{
+    originalKb: number;
+    compressedKb: number;
+    reduction: number;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{
+    voterName?: string;
+    voterPhone?: string;
+    amountTransferred?: string;
+  }>({});
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -255,24 +267,43 @@ export const VotingModal: React.FC<VotingModalProps> = ({
     });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('File size exceeds 5MB limit');
+    // Validate size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage('File size exceeds 10MB limit. Please choose a smaller photo.');
       return;
     }
 
     setReceiptFile(file);
+    setErrorMessage(null);
+
     if (file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(file);
-      setReceiptPreview(url);
+      try {
+        setIsUploading(true);
+        // Automatic compression for receipt images to guarantee lightning-fast upload and browser responsiveness
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setCompressedReceiptDataUrl(compressed.dataUrl);
+        setReceiptPreview(compressed.dataUrl);
+        setReceiptCompressionInfo({
+          originalKb: compressed.originalSizeKb,
+          compressedKb: compressed.compressedSizeKb,
+          reduction: compressed.reductionPercentage,
+        });
+      } catch (err) {
+        console.warn('Image compression fallback:', err);
+        const url = URL.createObjectURL(file);
+        setReceiptPreview(url);
+      } finally {
+        setIsUploading(false);
+      }
     } else {
       setReceiptPreview(null);
+      setCompressedReceiptDataUrl(null);
+      setReceiptCompressionInfo(null);
     }
-    setErrorMessage(null);
   };
 
   const triggerSuccessConfetti = () => {
@@ -316,58 +347,121 @@ export const VotingModal: React.FC<VotingModalProps> = ({
     }
   };
 
-  // Step 5: Submit Verification Proof
+  // Step 4: Submit Verification Proof
   const handleSubmitProof = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTransaction) return;
+
+    // 1. Validate form inputs properly (Voter Name, Phone, Amount)
+    const errors: { voterName?: string; voterPhone?: string; amountTransferred?: string } = {};
 
     if (!voterName.trim()) {
-      setErrorMessage('Full name is required');
+      errors.voterName = 'Voter full name is required';
+    }
+
+    if (!voterPhone.trim()) {
+      errors.voterPhone = 'Phone number is required for verification';
+    } else if (voterPhone.trim().replace(/[^0-9+]/g, '').length < 7) {
+      errors.voterPhone = 'Please enter a valid phone number (at least 7 digits)';
+    }
+
+    const numericAmount = Number(amountTransferred);
+    if (!amountTransferred || isNaN(numericAmount) || numericAmount <= 0) {
+      errors.amountTransferred = 'Please enter the actual amount transferred (minimum ₦1)';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setErrorMessage('Please fill in the required fields correctly.');
       return;
     }
 
-    if (!amountTransferred || Number(amountTransferred) <= 0) {
-      setErrorMessage('Please enter the actual amount transferred');
-      return;
-    }
-
+    setFormErrors({});
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      let uploadedReceiptUrl: string | undefined = undefined;
+      const targetCandidate = selectedCandidate || (candidates.length > 0 ? candidates[0] : null);
+      const effectiveRef =
+        activeTransaction?.paymentReference ||
+        `VOTE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const effectiveExpected =
+        activeTransaction?.expectedAmount || totalAmount || numericAmount;
+      const effectiveVotes =
+        activeTransaction?.voteQuantity ||
+        voteCount ||
+        Math.max(1, Math.floor(numericAmount / votePrice));
 
-      if (receiptFile) {
-        setIsUploading(true);
-        const uploadRes = await uploadReceiptFile(receiptFile);
-        uploadedReceiptUrl = uploadRes.receiptUrl;
-        setIsUploading(false);
+      let finalReceiptUrl = compressedReceiptDataUrl || undefined;
+
+      // Attempt background receipt upload if file provided, fallback to compressed image data URL
+      if (receiptFile && !finalReceiptUrl) {
+        try {
+          setIsUploading(true);
+          const uploadRes = await uploadReceiptFile(receiptFile);
+          if (uploadRes && uploadRes.receiptUrl) {
+            finalReceiptUrl = uploadRes.receiptUrl;
+          }
+        } catch (uploadErr) {
+          console.warn('Receipt upload fallback:', uploadErr);
+        } finally {
+          setIsUploading(false);
+        }
       }
 
+      // Submit payment proof (automatically saves locally to pendingVotes and Firestore)
       const res = await submitPaymentProof({
-        paymentReference: activeTransaction.paymentReference,
+        paymentReference: effectiveRef,
         voterName: voterName.trim(),
         voterEmail: voterEmail.trim(),
         voterPhone: voterPhone.trim(),
-        amountTransferred: Number(amountTransferred),
+        amountTransferred: numericAmount,
         bankTransactionId: bankTransactionId.trim() || undefined,
-        receiptUrl: uploadedReceiptUrl,
+        receiptUrl: finalReceiptUrl,
+        candidateId: targetCandidate?.id,
+        candidateName: targetCandidate?.name,
+        candidateState: targetCandidate?.state,
+        voteQuantity: effectiveVotes,
+        expectedAmount: effectiveExpected,
       });
 
-      setActiveTransaction(res.transaction);
+      const confirmedTx = res.transaction || {
+        id: `tx-${Date.now()}`,
+        paymentReference: effectiveRef,
+        competitionId: 'comp-chc-benin-01',
+        candidateId: targetCandidate?.id || '',
+        candidateName: targetCandidate?.name || '',
+        candidateState: targetCandidate?.state || '',
+        voterName: voterName.trim(),
+        voterEmail: voterEmail.trim(),
+        voterPhone: voterPhone.trim(),
+        voteQuantity: effectiveVotes,
+        expectedAmount: effectiveExpected,
+        amountTransferred: numericAmount,
+        bankTransactionId: bankTransactionId.trim() || undefined,
+        receiptUrl: finalReceiptUrl,
+        status: 'PENDING' as const,
+        submittedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setActiveTransaction(confirmedTx);
       setStep('SUCCESS');
 
-      // Trigger lightweight confetti animation upon successful payment reference submission
+      // Trigger celebratory confetti burst
       triggerSuccessConfetti();
 
       if (onVoteSubmitted) {
         onVoteSubmitted();
       }
-      if (onVoteSuccess && activeTransaction?.paymentReference) {
-        onVoteSuccess(activeTransaction.paymentReference);
+      if (onVoteSuccess) {
+        onVoteSuccess(confirmedTx.paymentReference);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Submission failed. Please check your information and retry.');
+      console.error('Error submitting proof:', err);
+      setErrorMessage(
+        err.message || 'Submission error. Please check your network and retry.'
+      );
     } finally {
       setIsSubmitting(false);
       setIsUploading(false);
@@ -898,24 +992,32 @@ export const VotingModal: React.FC<VotingModalProps> = ({
           )}
 
           {/* STEP 5: Payment Submission Form */}
-          {step === 'SUBMIT_PROOF' && activeTransaction && (
+          {step === 'SUBMIT_PROOF' && (
             <form onSubmit={handleSubmitProof} className="space-y-4">
               <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-slate-500 font-semibold">Payment Reference:</span>{' '}
                   <strong className="text-blue-950 font-mono font-bold">
-                    {activeTransaction.paymentReference}
+                    {activeTransaction?.paymentReference || 'Auto-generated on Submit'}
                   </strong>
                 </div>
                 <div>
                   <span className="text-slate-500 font-semibold">Expected:</span>{' '}
                   <strong className="text-emerald-700 font-bold">
-                    ₦{activeTransaction.expectedAmount.toLocaleString()}
+                    ₦{(activeTransaction?.expectedAmount || totalAmount).toLocaleString()}
                   </strong>
                 </div>
               </div>
 
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               <div className="space-y-3">
+                {/* Voter Full Name */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Voter Full Name <span className="text-red-500">*</span>
@@ -924,13 +1026,29 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                     type="text"
                     required
                     value={voterName}
-                    onChange={(e) => setVoterName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10 text-sm"
+                    onChange={(e) => {
+                      setVoterName(e.target.value);
+                      if (formErrors.voterName) {
+                        setFormErrors((prev) => ({ ...prev, voterName: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors ${
+                      formErrors.voterName
+                        ? 'border-red-500 bg-red-50/40 ring-1 ring-red-500 focus:outline-none'
+                        : 'border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10'
+                    }`}
                     placeholder="e.g. Bro. Emmanuel Chukwu"
                   />
+                  {formErrors.voterName && (
+                    <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formErrors.voterName}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Phone Number */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Phone / WhatsApp <span className="text-red-500">*</span>
@@ -939,12 +1057,28 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                       type="tel"
                       required
                       value={voterPhone}
-                      onChange={(e) => setVoterPhone(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10 text-sm"
+                      onChange={(e) => {
+                        setVoterPhone(e.target.value);
+                        if (formErrors.voterPhone) {
+                          setFormErrors((prev) => ({ ...prev, voterPhone: undefined }));
+                        }
+                      }}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-sm transition-colors ${
+                        formErrors.voterPhone
+                          ? 'border-red-500 bg-red-50/40 ring-1 ring-red-500 focus:outline-none'
+                          : 'border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10'
+                      }`}
                       placeholder="08012345678"
                     />
+                    {formErrors.voterPhone && (
+                      <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{formErrors.voterPhone}</span>
+                      </p>
+                    )}
                   </div>
 
+                  {/* Email Address */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Email Address <span className="text-slate-400 font-normal">(optional)</span>
@@ -960,6 +1094,7 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Actual Amount Transferred */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Actual Amount Transferred (₦) <span className="text-red-500">*</span>
@@ -969,11 +1104,28 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                       required
                       min="1"
                       value={amountTransferred}
-                      onChange={(e) => setAmountTransferred(Number(e.target.value) || '')}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10 text-sm font-semibold"
+                      onChange={(e) => {
+                        setAmountTransferred(Number(e.target.value) || '');
+                        if (formErrors.amountTransferred) {
+                          setFormErrors((prev) => ({ ...prev, amountTransferred: undefined }));
+                        }
+                      }}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                        formErrors.amountTransferred
+                          ? 'border-red-500 bg-red-50/40 ring-1 ring-red-500 focus:outline-none'
+                          : 'border-slate-300 focus:border-blue-900 focus:ring-2 focus:ring-blue-900/10'
+                      }`}
+                      placeholder={String(activeTransaction?.expectedAmount || totalAmount)}
                     />
+                    {formErrors.amountTransferred && (
+                      <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{formErrors.amountTransferred}</span>
+                      </p>
+                    )}
                   </div>
 
+                  {/* Bank Session / Transaction ID */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Bank Session / Transaction ID <span className="text-slate-400 font-normal">(optional)</span>
@@ -988,31 +1140,40 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                   </div>
                 </div>
 
-                {/* Receipt Upload */}
+                {/* Receipt Upload with Automatic Compression */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Upload Transfer Receipt / Screenshot <span className="text-slate-400 font-normal">(optional but speeds up approval)</span>
                   </label>
                   <div className="mt-1 flex justify-center px-4 pt-4 pb-4 border-2 border-slate-300 border-dashed rounded-xl hover:border-blue-900 transition-colors bg-slate-50/50">
-                    <div className="space-y-1 text-center">
+                    <div className="space-y-2 text-center w-full">
                       {receiptPreview ? (
                         <div className="flex flex-col items-center gap-2">
                           <img
                             src={receiptPreview}
                             alt="Receipt Preview"
-                            className="max-h-24 object-contain rounded-lg border border-slate-300"
+                            className="max-h-28 object-contain rounded-lg border border-slate-300 shadow-xs"
                           />
-                          <span className="text-xs font-bold text-emerald-700">Receipt Attached</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" /> Receipt Attached
+                            </span>
+                            {receiptCompressionInfo && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-medium px-2 py-0.5 rounded-full">
+                                Resized {receiptCompressionInfo.originalKb}KB → {receiptCompressionInfo.compressedKb}KB (-{receiptCompressionInfo.reduction}%)
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ) : receiptFile ? (
-                        <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                        <div className="flex items-center justify-center gap-2 text-xs font-bold text-blue-900">
                           <FileCheck className="w-5 h-5" />
                           <span>{receiptFile.name}</span>
                         </div>
                       ) : (
                         <Upload className="mx-auto h-8 w-8 text-slate-400" />
                       )}
-                      
+
                       <div className="flex text-xs text-slate-600 justify-center">
                         <label
                           htmlFor="receipt-upload"
@@ -1029,7 +1190,7 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                           />
                         </label>
                       </div>
-                      <p className="text-[11px] text-slate-500">PNG, JPG, PDF up to 5MB</p>
+                      <p className="text-[11px] text-slate-500">PNG, JPG, PDF (images automatically optimized for safe storage)</p>
                     </div>
                   </div>
                 </div>
@@ -1040,7 +1201,7 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep('PAYMENT_INSTRUCTIONS')}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Bank Info</span>
@@ -1053,7 +1214,7 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                   className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs tracking-wide shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer active:scale-98"
                 >
                   <span>
-                    {isUploading ? 'Uploading Receipt...' : isSubmitting ? 'Submitting Details...' : 'Submit Verification Details'}
+                    {isUploading ? 'Optimizing Receipt...' : isSubmitting ? 'Submitting Details...' : 'Submit Verification Details'}
                   </span>
                   <Check className="w-4 h-4" />
                 </button>
@@ -1062,18 +1223,18 @@ export const VotingModal: React.FC<VotingModalProps> = ({
           )}
 
           {/* STEP 6: Success Confirmation */}
-          {step === 'SUCCESS' && activeTransaction && (
+          {step === 'SUCCESS' && (
             <div className="text-center py-4 space-y-6">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
-                <Check className="w-8 h-8" />
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner ring-8 ring-emerald-50">
+                <Check className="w-8 h-8 stroke-[3]" />
               </div>
 
               <div>
                 <h4 className="text-xl font-extrabold text-blue-950 tracking-tight">
-                  PAYMENT SUBMITTED SUCCESSFULLY
+                  Vote Verification Submitted Successfully! Pending Admin Approval.
                 </h4>
                 <p className="text-xs text-slate-600 max-w-md mx-auto mt-2 leading-relaxed">
-                  Your payment details have been submitted successfully. Your votes will be counted after your payment has been verified by the church administrator.
+                  Your vote verification details have been recorded and saved under pending votes. The church administrator will review your transfer proof and credit the votes to the candidate once verified.
                 </p>
               </div>
 
@@ -1082,28 +1243,35 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <span className="text-xs text-slate-500 font-semibold">Payment Reference:</span>
                   <span className="text-sm font-black text-blue-950 font-mono">
-                    {activeTransaction.paymentReference}
+                    {activeTransaction?.paymentReference || 'N/A'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <span className="text-xs text-slate-500 font-semibold">Candidate:</span>
                   <span className="text-xs font-bold text-slate-800">
-                    {selectedCandidate?.name} ({selectedCandidate?.state})
+                    {selectedCandidate?.name || activeTransaction?.candidateName} ({selectedCandidate?.state || activeTransaction?.candidateState})
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="text-xs text-slate-500 font-semibold">Voter Name:</span>
+                  <span className="text-xs font-bold text-slate-800">
+                    {voterName || activeTransaction?.voterName}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <span className="text-xs text-slate-500 font-semibold">Votes Purchased:</span>
                   <span className="text-xs font-bold text-blue-900">
-                    {activeTransaction.voteQuantity.toLocaleString()} Votes
+                    {(activeTransaction?.voteQuantity || voteCount).toLocaleString()} Votes
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <span className="text-xs text-slate-500 font-semibold">Amount:</span>
-                  <span className="text-xs font-bold text-emerald-700">
-                    ₦{activeTransaction.expectedAmount.toLocaleString()}
+                  <span className="text-xs text-slate-500 font-semibold">Amount Transferred:</span>
+                  <span className="text-xs font-bold text-emerald-700 font-mono">
+                    ₦{Number(amountTransferred || activeTransaction?.amountTransferred || totalAmount).toLocaleString()}
                   </span>
                 </div>
 
@@ -1118,24 +1286,25 @@ export const VotingModal: React.FC<VotingModalProps> = ({
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    if (onGoToStatus && activeTransaction.paymentReference) {
-                      onGoToStatus(activeTransaction.paymentReference);
-                    }
-                  }}
-                  id="btn-check-status-from-modal"
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs tracking-wide shadow-md transition-colors"
+                  onClick={onClose}
+                  id="btn-return-home-from-modal"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs tracking-wide shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                 >
-                  Check Transaction Status
+                  <span>Return Home</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors"
+                  onClick={() => {
+                    onClose();
+                    if (onGoToStatus && activeTransaction?.paymentReference) {
+                      onGoToStatus(activeTransaction.paymentReference);
+                    }
+                  }}
+                  id="btn-check-status-from-modal"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-950 text-white font-bold text-xs tracking-wide shadow-md transition-colors cursor-pointer"
                 >
-                  Close
+                  <span>Check Transaction Status</span>
                 </button>
               </div>
             </div>

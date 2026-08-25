@@ -7,6 +7,7 @@ import {
   deletePayment,
   bulkDeletePayments,
 } from '../../services/api';
+import { subscribeToTransactionsRealtime } from '../../services/firebase';
 import {
   Search,
   Filter,
@@ -96,6 +97,32 @@ export const PaymentReviews: React.FC<PaymentReviewsProps> = ({
 
   useEffect(() => {
     loadPayments();
+
+    // Listen for local pending vote events
+    const handlePendingVotesChange = () => {
+      loadPayments();
+    };
+
+    window.addEventListener('chc_pending_votes_updated', handlePendingVotesChange);
+    window.addEventListener('chc_pending_vote_added', handlePendingVotesChange);
+
+    // Subscribe to real-time Firestore transaction changes across devices
+    let unsubscribeFirestore: (() => void) | null = null;
+    try {
+      unsubscribeFirestore = subscribeToTransactionsRealtime(() => {
+        loadPayments();
+      });
+    } catch (e) {
+      console.warn('Realtime firestore payments listener setup error:', e);
+    }
+
+    return () => {
+      window.removeEventListener('chc_pending_votes_updated', handlePendingVotesChange);
+      window.removeEventListener('chc_pending_vote_added', handlePendingVotesChange);
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+      }
+    };
   }, [statusFilter, candidateFilter, stateFilter, page, token]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

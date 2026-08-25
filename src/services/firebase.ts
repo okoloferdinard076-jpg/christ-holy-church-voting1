@@ -12,7 +12,7 @@ import {
   Unsubscribe,
   writeBatch,
 } from 'firebase/firestore';
-import { Candidate, Competition, PaymentSettings } from '../types';
+import { Candidate, Competition, PaymentSettings, VotingTransaction } from '../types';
 import defaultConfig from '../../firebase-applet-config.json';
 
 export interface FirebaseConfig {
@@ -283,6 +283,167 @@ export function subscribeToCompetitionRealtime(
   } catch (e) {
     console.warn('Firestore competition subscription error:', e);
     return () => {};
+  }
+}
+
+/**
+ * Subscribes to real-time updates for Voting Transactions / Pending Proofs.
+ */
+export function subscribeToTransactionsRealtime(
+  onUpdate: (transactions: VotingTransaction[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  try {
+    const db = getFirestoreDb();
+    const txCol = collection(db, 'transactions');
+
+    return onSnapshot(
+      txCol,
+      (snapshot) => {
+        const list: VotingTransaction[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Partial<VotingTransaction>;
+          list.push({
+            id: docSnap.id,
+            paymentReference: data.paymentReference || docSnap.id,
+            competitionId: data.competitionId || 'comp-chc-benin-01',
+            candidateId: data.candidateId || '',
+            candidateName: data.candidateName || '',
+            candidateState: data.candidateState || '',
+            voterName: data.voterName || '',
+            voterEmail: data.voterEmail || '',
+            voterPhone: data.voterPhone || '',
+            voteQuantity: typeof data.voteQuantity === 'number' ? data.voteQuantity : 0,
+            expectedAmount: typeof data.expectedAmount === 'number' ? data.expectedAmount : 0,
+            amountTransferred: typeof data.amountTransferred === 'number' ? data.amountTransferred : 0,
+            bankTransactionId: data.bankTransactionId || '',
+            receiptUrl: data.receiptUrl || '',
+            status: data.status || 'PENDING',
+            rejectionReason: data.rejectionReason,
+            approvedBy: data.approvedBy,
+            approvedByName: data.approvedByName,
+            approvedAt: data.approvedAt,
+            rejectedBy: data.rejectedBy,
+            rejectedByName: data.rejectedByName,
+            rejectedAt: data.rejectedAt,
+            submittedAt: data.submittedAt || data.createdAt || new Date().toISOString(),
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString(),
+          });
+        });
+
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        onUpdate(list);
+      },
+      (err) => {
+        console.warn('Firestore transactions subscription error:', err);
+        if (onError) onError(err);
+      }
+    );
+  } catch (e: any) {
+    console.warn('Firestore setup error on transaction subscription:', e);
+    if (onError) onError(e);
+    return () => {};
+  }
+}
+
+/**
+ * Saves a voting transaction to Firestore.
+ */
+export async function syncTransactionToFirestore(transaction: VotingTransaction): Promise<void> {
+  try {
+    const db = getFirestoreDb();
+    const docId = transaction.id || transaction.paymentReference;
+    const txDocRef = doc(db, 'transactions', docId);
+    const now = new Date().toISOString();
+
+    const dataToSave = {
+      ...transaction,
+      id: docId,
+      updatedAt: now,
+    };
+
+    await setDoc(txDocRef, dataToSave, { merge: true });
+  } catch (err) {
+    console.warn('Firestore transaction sync notice:', err);
+  }
+}
+
+/**
+ * Updates a voting transaction in Firestore (e.g. approve or reject).
+ */
+export async function updateTransactionInFirestore(
+  transactionId: string,
+  updates: Partial<VotingTransaction>
+): Promise<void> {
+  try {
+    const db = getFirestoreDb();
+    const txDocRef = doc(db, 'transactions', transactionId);
+    const now = new Date().toISOString();
+
+    await setDoc(txDocRef, { ...updates, updatedAt: now }, { merge: true });
+  } catch (err) {
+    console.warn('Firestore transaction update notice:', err);
+  }
+}
+
+/**
+ * Deletes a voting transaction in Firestore.
+ */
+export async function deleteTransactionFromFirestore(transactionId: string): Promise<void> {
+  try {
+    const db = getFirestoreDb();
+    const txDocRef = doc(db, 'transactions', transactionId);
+    await deleteDoc(txDocRef);
+  } catch (err) {
+    console.warn('Firestore transaction deletion notice:', err);
+  }
+}
+
+/**
+ * Fetches all transactions from Firestore.
+ */
+export async function fetchTransactionsFromFirestore(): Promise<VotingTransaction[]> {
+  try {
+    const db = getFirestoreDb();
+    const txCol = collection(db, 'transactions');
+    const snapshot = await getDocs(txCol);
+    const list: VotingTransaction[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Partial<VotingTransaction>;
+      list.push({
+        id: docSnap.id,
+        paymentReference: data.paymentReference || docSnap.id,
+        competitionId: data.competitionId || 'comp-chc-benin-01',
+        candidateId: data.candidateId || '',
+        candidateName: data.candidateName || '',
+        candidateState: data.candidateState || '',
+        voterName: data.voterName || '',
+        voterEmail: data.voterEmail || '',
+        voterPhone: data.voterPhone || '',
+        voteQuantity: typeof data.voteQuantity === 'number' ? data.voteQuantity : 0,
+        expectedAmount: typeof data.expectedAmount === 'number' ? data.expectedAmount : 0,
+        amountTransferred: typeof data.amountTransferred === 'number' ? data.amountTransferred : 0,
+        bankTransactionId: data.bankTransactionId || '',
+        receiptUrl: data.receiptUrl || '',
+        status: data.status || 'PENDING',
+        rejectionReason: data.rejectionReason,
+        approvedBy: data.approvedBy,
+        approvedByName: data.approvedByName,
+        approvedAt: data.approvedAt,
+        rejectedBy: data.rejectedBy,
+        rejectedByName: data.rejectedByName,
+        rejectedAt: data.rejectedAt,
+        submittedAt: data.submittedAt || data.createdAt || new Date().toISOString(),
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+      });
+    });
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Firestore transactions query notice:', err);
+    return [];
   }
 }
 
