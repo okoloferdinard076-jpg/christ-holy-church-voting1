@@ -21,6 +21,9 @@ import {
   FileCheck,
   Clock,
   Sparkles,
+  Trash2,
+  Image as ImageIcon,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -88,6 +91,7 @@ export const VotingModal: React.FC<VotingModalProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const getInitials = (name: string) => {
     return name
@@ -267,24 +271,34 @@ export const VotingModal: React.FC<VotingModalProps> = ({
     });
   };
 
+  const handleRemoveReceipt = () => {
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    setCompressedReceiptDataUrl(null);
+    setReceiptCompressionInfo(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('File size exceeds 10MB limit. Please choose a smaller photo.');
+    // Validate size (up to 15MB before compression)
+    if (file.size > 15 * 1024 * 1024) {
+      setErrorMessage('Selected file exceeds 15MB limit. Please choose a smaller photo or screenshot.');
       return;
     }
 
     setReceiptFile(file);
     setErrorMessage(null);
 
-    if (file.type.startsWith('image/')) {
-      try {
-        setIsUploading(true);
-        // Automatic compression for receipt images to guarantee lightning-fast upload and browser responsiveness
-        const compressed = await compressImageFile(file, 800, 800, 0.75);
+    try {
+      setIsUploading(true);
+      if (file.type.startsWith('image/') || file.type === '' || file.name.match(/\.(jpg|jpeg|png|webp|heic|bmp)$/i)) {
+        // Automatically compress and resize uploaded images with HTML5 canvas (max 800x800, quality 0.6, <200KB)
+        const compressed = await compressImageFile(file, 800, 800, 0.6);
         setCompressedReceiptDataUrl(compressed.dataUrl);
         setReceiptPreview(compressed.dataUrl);
         setReceiptCompressionInfo({
@@ -292,17 +306,39 @@ export const VotingModal: React.FC<VotingModalProps> = ({
           compressedKb: compressed.compressedSizeKb,
           reduction: compressed.reductionPercentage,
         });
-      } catch (err) {
-        console.warn('Image compression fallback:', err);
+      } else {
+        // Non-image document handling (PDF)
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const res = (ev.target?.result as string) || '';
+          setCompressedReceiptDataUrl(res);
+          setReceiptPreview(null);
+          setReceiptCompressionInfo({
+            originalKb: Math.round(file.size / 1024),
+            compressedKb: Math.round(file.size / 1024),
+            reduction: 0,
+          });
+        };
+        reader.onerror = () => {
+          console.warn('Document read warning');
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err: any) {
+      console.warn('Receipt processing fallback handled gracefully:', err);
+      // Graceful notification without blocking submission
+      setErrorMessage(
+        'Could not optimize the selected image format. You can still submit your payment details without an attachment, or choose a different photo.'
+      );
+      // Set basic preview fallback if possible
+      try {
         const url = URL.createObjectURL(file);
         setReceiptPreview(url);
-      } finally {
-        setIsUploading(false);
+      } catch {
+        // Ignore fallback preview error
       }
-    } else {
-      setReceiptPreview(null);
-      setCompressedReceiptDataUrl(null);
-      setReceiptCompressionInfo(null);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1142,57 +1178,136 @@ export const VotingModal: React.FC<VotingModalProps> = ({
 
                 {/* Receipt Upload with Automatic Compression */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Upload Transfer Receipt / Screenshot <span className="text-slate-400 font-normal">(optional but speeds up approval)</span>
-                  </label>
-                  <div className="mt-1 flex justify-center px-4 pt-4 pb-4 border-2 border-slate-300 border-dashed rounded-xl hover:border-blue-900 transition-colors bg-slate-50/50">
-                    <div className="space-y-2 text-center w-full">
-                      {receiptPreview ? (
-                        <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Upload Transfer Receipt / Screenshot
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">(Optional)</span>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    id="receipt-upload"
+                    name="receipt-upload"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/jpg,image/webp,image/*,application/pdf"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+
+                  {receiptPreview ? (
+                    /* Image Preview Card */
+                    <div className="p-3.5 bg-slate-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row items-center gap-3.5 justify-between transition-all">
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-white flex items-center justify-center shadow-xs">
                           <img
                             src={receiptPreview}
                             alt="Receipt Preview"
-                            className="max-h-28 object-contain rounded-lg border border-slate-300 shadow-xs"
+                            className="w-full h-full object-cover"
                           />
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5" /> Receipt Attached
-                            </span>
-                            {receiptCompressionInfo && (
-                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-medium px-2 py-0.5 rounded-full">
-                                Resized {receiptCompressionInfo.originalKb}KB → {receiptCompressionInfo.compressedKb}KB (-{receiptCompressionInfo.reduction}%)
-                              </span>
-                            )}
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <div className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <p className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
+                              {receiptFile?.name || 'Transfer_Receipt.jpg'}
+                            </p>
                           </div>
+                          {receiptCompressionInfo ? (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+                                {receiptCompressionInfo.compressedKb} KB (Compressed -{receiptCompressionInfo.reduction}%)
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                Ready for submission
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                              Image attached successfully
+                            </p>
+                          )}
                         </div>
-                      ) : receiptFile ? (
-                        <div className="flex items-center justify-center gap-2 text-xs font-bold text-blue-900">
-                          <FileCheck className="w-5 h-5" />
-                          <span>{receiptFile.name}</span>
-                        </div>
-                      ) : (
-                        <Upload className="mx-auto h-8 w-8 text-slate-400" />
-                      )}
+                      </div>
 
-                      <div className="flex text-xs text-slate-600 justify-center">
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-200">
                         <label
                           htmlFor="receipt-upload"
-                          className="relative cursor-pointer bg-white rounded-md font-bold text-blue-900 hover:text-blue-800 focus-within:outline-none"
+                          className="cursor-pointer text-xs font-bold text-blue-900 hover:text-blue-950 bg-white border border-slate-300 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-100 transition-colors flex items-center gap-1.5"
                         >
-                          <span>{receiptFile ? 'Change document' : 'Upload bank receipt'}</span>
-                          <input
-                            id="receipt-upload"
-                            name="receipt-upload"
-                            type="file"
-                            accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
-                            onChange={handleFileChange}
-                            className="sr-only"
-                          />
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>Change</span>
                         </label>
+                        <button
+                          type="button"
+                          onClick={handleRemoveReceipt}
+                          id="btn-remove-receipt-image"
+                          className="cursor-pointer text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
                       </div>
-                      <p className="text-[11px] text-slate-500">PNG, JPG, PDF (images automatically optimized for safe storage)</p>
                     </div>
-                  </div>
+                  ) : receiptFile ? (
+                    /* Non-Image Document (PDF) Preview Card */
+                    <div className="p-3.5 bg-slate-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row items-center gap-3 justify-between transition-all">
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="shrink-0 w-12 h-12 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center">
+                          <FileText className="w-6 h-6" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
+                            {receiptFile.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                            {Math.round(receiptFile.size / 1024)} KB &bull; Document Attached
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-200">
+                        <label
+                          htmlFor="receipt-upload"
+                          className="cursor-pointer text-xs font-bold text-blue-900 hover:text-blue-950 bg-white border border-slate-300 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+                        >
+                          <span>Change</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleRemoveReceipt}
+                          id="btn-remove-receipt-doc"
+                          className="cursor-pointer text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Empty Upload Dropzone */
+                    <label
+                      htmlFor="receipt-upload"
+                      className="mt-1 flex flex-col items-center justify-center px-4 py-4 border-2 border-slate-300 border-dashed rounded-xl hover:border-blue-900 hover:bg-blue-50/20 transition-all bg-slate-50/50 cursor-pointer group"
+                    >
+                      <div className="space-y-1.5 text-center">
+                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-900 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-blue-950">
+                            Click or tap to attach transfer receipt / screenshot
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            JPG, PNG, mobile screenshots &bull; Auto-compressed under 200KB
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          (Optional — You can still submit without an image)
+                        </p>
+                      </div>
+                    </label>
+                  )}
                 </div>
               </div>
 
