@@ -7,6 +7,7 @@ import { CandidateManager } from './admin/CandidateManager';
 import { PaymentSettingsManager } from './admin/PaymentSettingsManager';
 import { AuditLogViewer } from './admin/AuditLogViewer';
 import { ReportsView } from './admin/ReportsView';
+import { FirebaseConfigManager } from './admin/FirebaseConfigManager';
 import { ChcLogo } from './ChcLogo';
 import {
   LayoutDashboard,
@@ -24,6 +25,7 @@ import {
   AlertCircle,
   LogOut,
   Shield,
+  Cloud,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -366,6 +368,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </button>
 
               <button
+                onClick={() => setActiveTab('firebase')}
+                className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+                  activeTab === 'firebase'
+                    ? 'bg-blue-900 text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+                id="admin-tab-firebase"
+              >
+                <Cloud className="w-4 h-4 text-amber-500" />
+                <span>Firebase Sync</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('audit')}
                 className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                   activeTab === 'audit'
@@ -426,6 +441,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     onRefreshData();
                   }}
                 />
+              )}
+
+              {activeTab === 'firebase' && (
+                <FirebaseConfigManager candidates={candidates} onSyncComplete={onRefreshData} />
               )}
 
               {activeTab === 'audit' && <AuditLogViewer token={ADMIN_TOKEN} />}

@@ -1,4 +1,9 @@
 import { PublicContestData, Candidate, VotingTransaction, AdminDashboardStats, PaymentSettings, AuditLog } from '../types';
+import {
+  syncCandidateToFirestore,
+  updateCandidateInFirestore,
+  deleteCandidateFromFirestore,
+} from './firebase';
 
 const API_BASE = '/api';
 
@@ -403,7 +408,16 @@ export async function createCandidate(
   const updatedList = [...currentList, newCandidate];
   setStoredCandidates(updatedList);
 
-  // 2. Safe background server sync
+  // 2. Instant Firestore Cloud synchronization
+  try {
+    syncCandidateToFirestore(newCandidate).catch((err) =>
+      console.warn('Firestore create sync error:', err)
+    );
+  } catch (e) {
+    console.warn('Firestore async push error:', e);
+  }
+
+  // 3. Safe background server sync
   try {
     fetch(`${API_BASE}/admin/candidates`, {
       method: 'POST',
@@ -461,7 +475,16 @@ export async function updateCandidate(
   // 1. Direct synchronous persistence
   setStoredCandidates(currentList);
 
-  // 2. Safe background server sync
+  // 2. Instant Firestore Cloud synchronization
+  try {
+    syncCandidateToFirestore(targetCandidate).catch((err) =>
+      console.warn('Firestore update sync error:', err)
+    );
+  } catch (e) {
+    console.warn('Firestore async update push error:', e);
+  }
+
+  // 3. Safe background server sync
   try {
     fetch(`${API_BASE}/admin/candidates/${encodeURIComponent(candidateId)}`, {
       method: 'PUT',
@@ -483,6 +506,16 @@ export async function deleteCandidate(
   const filtered = currentList.filter((c) => !matchCandidateId(c.id, candidateId) && c.slug !== candidateId);
   setStoredCandidates(filtered);
 
+  // 1. Instant Firestore Cloud deletion
+  try {
+    deleteCandidateFromFirestore(candidateId).catch((err) =>
+      console.warn('Firestore delete sync error:', err)
+    );
+  } catch (e) {
+    console.warn('Firestore async delete error:', e);
+  }
+
+  // 2. Safe background server sync
   try {
     fetch(`${API_BASE}/admin/candidates/${encodeURIComponent(candidateId)}`, {
       method: 'DELETE',

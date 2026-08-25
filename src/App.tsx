@@ -7,6 +7,12 @@ import {
   setStoredCandidates,
   matchCandidateId,
 } from './services/api';
+import {
+  subscribeToCandidatesRealtime,
+  subscribeToPaymentSettingsRealtime,
+  subscribeToCompetitionRealtime,
+  seedInitialCandidatesIfEmpty,
+} from './services/firebase';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { CandidateCard } from './components/CandidateCard';
@@ -164,6 +170,33 @@ export default function App() {
     loadData(true);
     refreshPendingCount();
 
+    // 1. Initialize Firestore seed if collection is completely fresh
+    seedInitialCandidatesIfEmpty(DEFAULT_CANDIDATES).catch((err) =>
+      console.warn('Firebase initial seed check:', err)
+    );
+
+    // 2. Subscribe to Real-time Firestore updates across all devices
+    const unsubscribeCandidates = subscribeToCandidatesRealtime((realtimeCandidates) => {
+      if (Array.isArray(realtimeCandidates) && realtimeCandidates.length > 0) {
+        setCandidates(realtimeCandidates);
+        setStoredCandidates(realtimeCandidates);
+        const total = realtimeCandidates.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
+        setTotalVotes(total);
+      }
+    });
+
+    const unsubscribePaymentSettings = subscribeToPaymentSettingsRealtime((settings) => {
+      if (settings) {
+        setPaymentSettings(settings);
+      }
+    });
+
+    const unsubscribeCompetition = subscribeToCompetitionRealtime((comp) => {
+      if (comp) {
+        setCompetition(comp);
+      }
+    });
+
     const handleCandidateUpdate = (e: any) => {
       const updated = e.detail?.candidates || getStoredCandidates();
       if (Array.isArray(updated) && updated.length > 0) {
@@ -173,12 +206,15 @@ export default function App() {
 
     window.addEventListener('chc_candidates_updated', handleCandidateUpdate);
 
-    // Refresh contest data every 10 seconds
-    const contestInterval = setInterval(() => loadData(true), 10000);
+    // Refresh contest data periodically as fallback
+    const contestInterval = setInterval(() => loadData(true), 15000);
     // Real-time pending count poller for authenticated admins
     const notificationInterval = setInterval(refreshPendingCount, 6000);
 
     return () => {
+      unsubscribeCandidates();
+      unsubscribePaymentSettings();
+      unsubscribeCompetition();
       window.removeEventListener('chc_candidates_updated', handleCandidateUpdate);
       clearInterval(contestInterval);
       clearInterval(notificationInterval);

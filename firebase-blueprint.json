@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Contestant in the church crown competition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "state": { "type": "string" },
+        "biography": { "type": "string" },
+        "image": { "type": "string" },
+        "status": { "type": "string" },
+        "sortOrder": { "type": "number" },
+        "approvedVotes": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "state"]
+    },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Bank and vote settings",
+      "type": "object",
+      "properties": {
+        "costPerVote": { "type": "number" },
+        "currency": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "accountName": { "type": "string" },
+        "manualTransferEnabled": { "type": "boolean" },
+        "paystackPublicKey": { "type": "string" },
+        "flutterwavePublicKey": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "candidates": {
+      "entity": "Candidate",
+      "description": "Contestants in the competition"
+    },
+    "settings": {
+      "entity": "PaymentSettings",
+      "description": "Global application configuration"
+    }
+  }
+}

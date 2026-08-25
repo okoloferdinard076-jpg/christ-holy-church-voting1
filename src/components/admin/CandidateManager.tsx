@@ -7,6 +7,7 @@ import {
   uploadCandidatePhoto,
   matchCandidateId,
 } from '../../services/api';
+import { compressImageFile, CompressionResult } from '../../utils/imageCompressor';
 import {
   Users,
   Plus,
@@ -26,6 +27,7 @@ import {
   Link as LinkIcon,
   Sparkles,
   Search,
+  Zap,
 } from 'lucide-react';
 
 interface CandidateManagerProps {
@@ -54,6 +56,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
   // Photo mode: 'upload' or 'url'
   const [photoMode, setPhotoMode] = useState<'upload' | 'url'>('upload');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<CompressionResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Quick card photo upload
@@ -83,6 +86,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setSortOrder(candidates.length + 1);
     setStatus('ACTIVE');
     setPhotoMode('upload');
+    setCompressionInfo(null);
     setIsAddOpen(true);
     setEditingCandidate(null);
     setMessage(null);
@@ -106,11 +110,12 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setSortOrder(c.sortOrder || 1);
     setStatus(c.status);
     setPhotoMode(c.image?.startsWith('http') && !c.image.includes('/api/uploads') ? 'url' : 'upload');
+    setCompressionInfo(null);
     setIsAddOpen(false);
     setMessage(null);
   };
 
-  // Process and upload file
+  // Process, compress, and upload file
   const handleFileUpload = async (file: File, forCandId?: string) => {
     if (!file) return;
 
@@ -127,22 +132,28 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       }
       setMessage(null);
 
-      // Upload to server
-      const res = await uploadCandidatePhoto(file);
-      if (res && res.photoUrl) {
-        if (forCandId) {
-          // Direct quick update on existing candidate
-          await updateCandidate(token, forCandId, { image: res.photoUrl });
-          setMessage({ type: 'success', text: 'Contestant photo updated successfully!' });
-          onRefresh();
-        } else {
-          // Update in form state
-          setImage(res.photoUrl);
-          setMessage({ type: 'success', text: 'Photo uploaded and ready to save!' });
-        }
+      // Client-side image compression downscaling to max 800x800 high quality JPEG
+      const compressed = await compressImageFile(file, 800, 800, 0.82);
+      setCompressionInfo(compressed);
+
+      if (forCandId) {
+        // Direct quick update on existing candidate with compressed image
+        await updateCandidate(token, forCandId, { image: compressed.dataUrl });
+        setMessage({
+          type: 'success',
+          text: `Photo optimized (${compressed.compressedSizeKb} KB, -${compressed.reductionPercentage}%) and synced to Firestore!`,
+        });
+        onRefresh();
+      } else {
+        // Update in form state
+        setImage(compressed.dataUrl);
+        setMessage({
+          type: 'success',
+          text: `Photo compressed: ${compressed.originalSizeKb} KB ➔ ${compressed.compressedSizeKb} KB (${compressed.reductionPercentage}% smaller, safe for mobile phones).`,
+        });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to upload photo.' });
+      setMessage({ type: 'error', text: err.message || 'Failed to process and compress photo.' });
     } finally {
       setIsUploadingPhoto(false);
       setQuickUploadCandId(null);
@@ -673,7 +684,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                           {isUploadingPhoto ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin text-blue-900" />
-                              <span>Uploading Photo...</span>
+                              <span>Compressing & Uploading Photo...</span>
                             </>
                           ) : (
                             <>
@@ -682,9 +693,18 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                             </>
                           )}
                         </button>
-                        <p className="text-[10px] text-slate-500">
-                          Supports PNG, JPG, or WEBP (Max 5MB). Photo is saved automatically.
-                        </p>
+                        {compressionInfo ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                            <Zap className="w-3 h-3 text-emerald-600" />
+                            <span>
+                              Compressed: {compressionInfo.originalSizeKb} KB ➔ {compressionInfo.compressedSizeKb} KB (-{compressionInfo.reductionPercentage}%)
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-500">
+                            Auto-compressed on device (JPG/PNG/WEBP) for lightning-fast mobile loading.
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-1">
