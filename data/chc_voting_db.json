@@ -1,0 +1,494 @@
+{
+  "users": [
+    {
+      "id": "usr-admin-01",
+      "name": "Executive Admin",
+      "email": "medicreceptor@gmail.com",
+      "phone": "09017311644",
+      "passwordHash": "$2b$10$sioGqUDZrNKQ/qhPFQalPOD/bX4f2wFUSldIANlmprWDfeCU94NNe",
+      "role": "SUPER_ADMIN",
+      "createdAt": "2026-08-21T14:32:09.193Z",
+      "updatedAt": "2026-08-25T20:44:34.275Z"
+    },
+    {
+      "id": "usr-admin-02",
+      "name": "Contest Presiding Admin",
+      "email": "ferdinardokolo@gmail.com",
+      "phone": "09017311644",
+      "passwordHash": "$2b$10$sioGqUDZrNKQ/qhPFQalPOD/bX4f2wFUSldIANlmprWDfeCU94NNe",
+      "role": "SUPER_ADMIN",
+      "createdAt": "2026-08-21T21:07:32.409Z",
+      "updatedAt": "2026-08-25T20:44:34.275Z"
+    },
+    {
+      "id": "usr-admin-03",
+      "name": "Precious Okonkwo",
+      "email": "preciousokonkwo@gmail.com",
+      "phone": "09017311644",
+      "passwordHash": "$2b$10$X/An6tx.XpV6iMohoXrukOu1LvZT8S1FEYHLWO1avV6dGHmvyXiqS",
+      "role": "SUPER_ADMIN",
+      "createdAt": "2026-08-23T08:04:00.000Z",
+      "updatedAt": "2026-08-23T08:04:29.263Z"
+    }
+  ],
+  "competitions": [
+    {
+      "id": "comp-chc-benin-01",
+      "name": "WHO WILL WEAR THE CROWN OF CHRIST HOLY CHURCH INTERNATIONAL NO2 BENIN AMBASSADORSHIP",
+      "slug": "who-will-wear-the-crown-chc-no2-benin",
+      "description": "Official ambassadorial contest organized by Christ Holy Church International No. 2 Benin. Support your preferred ambassador with verified votes.",
+      "image": "/logo.svg",
+      "startDate": "2026-08-01T00:00:00.000Z",
+      "endDate": "2026-10-31T23:59:59.000Z",
+      "votePrice": 50,
+      "status": "ACTIVE",
+      "votingRules": "1. Votes are purchased at ₦50 per vote via direct bank transfer to the official designated church account.\n2. Each vote transaction generates a unique payment reference.\n3. After making your transfer, submit your transaction reference, contact info, and receipt.\n4. Votes are counted strictly upon administrator verification and approval.",
+      "createdAt": "2026-08-21T14:32:09.193Z",
+      "updatedAt": "2026-08-21T14:32:09.193Z"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "cand-01",
+      "competitionId": "comp-chc-benin-01",
+      "name": "Bro David Okolo",
+      "slug": "bro-david-okolo",
+      "state": "Edo Contestant",
+      "biography": "Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.",
+      "image": "",
+      "status": "ACTIVE",
+      "sortOrder": 1,
+      "createdAt": "2026-08-25T20:40:00.000Z",
+      "updatedAt": "2026-08-25T20:40:00.000Z"
+    },
+    {
+      "id": "cand-02",
+      "competitionId": "comp-chc-benin-01",
+      "name": "Bro Chiagozie Okafor",
+      "slug": "bro-chiagozie-okafor",
+      "state": "Yoruba Contestant",
+      "biography": "Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.",
+      "image": "",
+      "status": "ACTIVE",
+      "sortOrder": 2,
+      "createdAt": "2026-08-25T20:40:00.000Z",
+      "updatedAt": "2026-08-25T20:40:00.000Z"
+    }
+  ],
+  "voting_transactions": [],
+  "vote_ledger": [],
+  "payment_settings": {
+    "id": "sett-01",
+    "bankName": "OPAY",
+    "accountName": "Okonkwo Precious",
+    "accountNumber": "9017311644",
+    "votePrice": 50,
+    "paymentInstructions": "Transfer the exact amount shown below to the designated OPAY account and submit your payment details with transfer receipt for verification.",
+    "updatedBy": "usr-admin-01",
+    "updatedAt": "2026-08-21T14:32:09.193Z"
+  },
+  "audit_logs": [
+    {
+      "id": "log-seed-01",
+      "actorUserId": "usr-admin-01",
+      "actorName": "System Setup",
+      "action": "SYSTEM_INITIALIZATION",
+      "entityType": "SYSTEM",
+      "entityId": "SYSTEM",
+      "metadata": {
+        "event": "WHO WILL WEAR THE CROWN OF CHRIST HOLY CHURCH INTERNATIONAL NO2 BENIN AMBASSADORSHIP initialized",
+        "candidatesSeeded": 4,
+        "votePrice": 50
+      },
+      "createdAt": "2026-08-21T14:32:09.193Z"
+    },
+    {
+      "id": "log-1787336529660-303ead",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787327372827-fec1e5",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-AF1B2B45",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T18:22:09.660Z"
+    },
+    {
+      "id": "log-1787336534414-b4100c",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787327387529-597020",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-D062ECF2",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T18:22:14.414Z"
+    },
+    {
+      "id": "log-1787336538569-142c79",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787327353208-dd5d06",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-12EC71F2",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T18:22:18.569Z"
+    },
+    {
+      "id": "log-1787336541447-1db732",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787327365238-800e1b",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-EAF2FC3C",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T18:22:21.447Z"
+    },
+    {
+      "id": "log-1787336543761-7966e5",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787327346361-8f1b80",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-5F28A872",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 1,
+        "expectedAmount": 50,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T18:22:23.761Z"
+    },
+    {
+      "id": "log-1787345573033-1f0649",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345480331-f5b4f2",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-482229D7",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T20:52:53.033Z"
+    },
+    {
+      "id": "log-1787345576733-0623d0",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345169034-ae1ee3",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-F0980C86",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 25,
+        "expectedAmount": 1250,
+        "candidateId": "cand-02",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T20:52:56.733Z"
+    },
+    {
+      "id": "log-1787345579394-1d02d2",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345122540-1c7fec",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-AFD8FA69",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T20:52:59.394Z"
+    },
+    {
+      "id": "log-1787345585741-b66774",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345301748-5258a8",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-6B95AB81",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T20:53:05.741Z"
+    },
+    {
+      "id": "log-1787345587833-d862bb",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345165667-928e1d",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-331D834B",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T20:53:07.833Z"
+    },
+    {
+      "id": "log-1787345879515-b286d2",
+      "actorUserId": "VOTER_SUBMISSION",
+      "actorName": "Bro. Emmanuel",
+      "action": "PAYMENT_PROOF_SUBMITTED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345877742-54716a",
+      "metadata": {
+        "paymentReference": "VOTE-D82F4BC2",
+        "amountTransferred": 1000,
+        "expectedAmount": 1000,
+        "candidateId": "cand-01",
+        "receiptUploaded": false
+      },
+      "createdAt": "2026-08-21T20:57:59.515Z"
+    },
+    {
+      "id": "log-1787345900522-799f93",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_APPROVED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345877742-54716a",
+      "previousValue": "PENDING",
+      "newValue": "APPROVED",
+      "metadata": {
+        "paymentReference": "VOTE-D82F4BC2",
+        "candidateId": "cand-01",
+        "candidateName": "Amarachi Akunne",
+        "candidateState": "Imo State",
+        "voteQuantity": 20,
+        "expectedAmount": 1000,
+        "amountTransferred": 1000,
+        "voterName": "Bro. Emmanuel",
+        "voterPhone": "08012345678"
+      },
+      "createdAt": "2026-08-21T20:58:20.522Z"
+    },
+    {
+      "id": "log-1787345994961-376bc7",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787345877742-54716a",
+      "previousValue": "APPROVED",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-D82F4BC2",
+        "voterName": "Bro. Emmanuel",
+        "voterEmail": "",
+        "voterPhone": "08012345678",
+        "statusBeforeDeletion": "APPROVED",
+        "voteQuantity": 20,
+        "expectedAmount": 1000,
+        "candidateId": "cand-01",
+        "votesDeducted": 20
+      },
+      "createdAt": "2026-08-21T20:59:54.961Z"
+    },
+    {
+      "id": "log-1787346022018-f0f6c5",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787346006857-d74ea5",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-BBCB43C8",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T21:00:22.018Z"
+    },
+    {
+      "id": "log-1787347948900-85f761",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787347904516-ac50fb",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-4B718E2A",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-03",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T21:32:28.900Z"
+    },
+    {
+      "id": "log-1787347965530-512ae4",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787347901834-623807",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-9EF18B15",
+        "voterName": "",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-03",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-21T21:32:45.530Z"
+    },
+    {
+      "id": "log-1787690457807-455165",
+      "actorUserId": "usr-admin-03",
+      "actorName": "Precious Okonkwo",
+      "action": "TRANSACTION_DELETED",
+      "entityType": "TRANSACTION",
+      "entityId": "tx-1787690454918-717779",
+      "previousValue": "PENDING",
+      "newValue": "DELETED",
+      "metadata": {
+        "paymentReference": "VOTE-4933A1C3",
+        "voterName": "Test Voter",
+        "voterEmail": "",
+        "voterPhone": "",
+        "statusBeforeDeletion": "PENDING",
+        "voteQuantity": 10,
+        "expectedAmount": 500,
+        "candidateId": "cand-01",
+        "votesDeducted": 0
+      },
+      "createdAt": "2026-08-25T20:40:57.807Z"
+    },
+    {
+      "id": "log-1787690689015-5be298",
+      "actorUserId": "usr-admin-03",
+      "actorName": "Precious Okonkwo",
+      "action": "CANDIDATE_CREATED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-1787690689015-623a",
+      "newValue": "{\"id\":\"cand-1787690689015-623a\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Sis Miracle James\",\"slug\":\"sis-miracle-james\",\"state\":\"Delta State\",\"biography\":\"Passionate praise leader and youth ambassador.\",\"image\":\"\",\"status\":\"ACTIVE\",\"sortOrder\":3,\"createdAt\":\"2026-08-25T20:44:49.015Z\",\"updatedAt\":\"2026-08-25T20:44:49.015Z\"}",
+      "createdAt": "2026-08-25T20:44:49.015Z"
+    },
+    {
+      "id": "log-1787690689019-cc62f9",
+      "actorUserId": "usr-admin-03",
+      "actorName": "Precious Okonkwo",
+      "action": "CANDIDATE_DELETED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-1787690689015-623a",
+      "previousValue": "{\"id\":\"cand-1787690689015-623a\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Sis Miracle James\",\"slug\":\"sis-miracle-james\",\"state\":\"Delta State\",\"biography\":\"Passionate praise leader and youth ambassador.\",\"image\":\"\",\"status\":\"ACTIVE\",\"sortOrder\":3,\"createdAt\":\"2026-08-25T20:44:49.015Z\",\"updatedAt\":\"2026-08-25T20:44:49.015Z\"}",
+      "createdAt": "2026-08-25T20:44:49.019Z"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Christ Holy Church No 2 Benin Ambassadorship Voting",
+  "description": "Official voting platform for Who Will Wear The Crown of Christ Holy Church International No. 2 Benin Ambassadorship",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
