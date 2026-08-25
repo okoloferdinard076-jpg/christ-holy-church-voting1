@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChcLogo } from './ChcLogo';
-import { ShieldCheck, Heart, Lock, MessageCircle } from 'lucide-react';
+import { ShieldCheck, Heart, Shield, MessageCircle } from 'lucide-react';
 
 interface FooterProps {
   onOpenAdmin: () => void;
@@ -83,8 +83,8 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdmin, isAdminLoggedIn, pe
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 text-xs font-medium transition-colors cursor-pointer"
                 id="footer-admin-login-btn"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isAdminLoggedIn ? 'Admin Portal (Active)' : 'Admin Portal'}</span>
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin Dashboard</span>
                 {isAdminLoggedIn && pendingPaymentsCount > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white font-extrabold text-[10px] animate-pulse">
                     {pendingPaymentsCount} PENDING
