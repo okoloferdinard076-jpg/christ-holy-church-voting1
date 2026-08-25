@@ -100,11 +100,12 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [statusCheckRef, setStatusCheckRef] = useState<string | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    return !!localStorage.getItem('chc_admin_token');
+    return sessionStorage.getItem('isAdminAuthenticated') === 'true';
   });
 
   const checkAdminSession = () => {
-    setIsAdminLoggedIn(!!localStorage.getItem('chc_admin_token'));
+    const isAuth = sessionStorage.getItem('isAdminAuthenticated') === 'true';
+    setIsAdminLoggedIn(isAuth);
   };
 
   const loadData = async (silent = false) => {
@@ -144,15 +145,15 @@ export default function App() {
   };
 
   const refreshPendingCount = async () => {
-    const token = localStorage.getItem('chc_admin_token');
-    if (!token) {
+    const isAuth = sessionStorage.getItem('isAdminAuthenticated') === 'true';
+    if (!isAuth) {
       setPendingPaymentsCount(0);
       setIsAdminLoggedIn(false);
       return;
     }
     setIsAdminLoggedIn(true);
     try {
-      const count = await fetchPendingTransactionsCount(token);
+      const count = await fetchPendingTransactionsCount('admin_session_unlocked');
       setPendingPaymentsCount(count);
     } catch (e) {
       // quiet fallback
