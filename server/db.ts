@@ -1109,8 +1109,16 @@ class DatabaseService {
   async deleteCandidate(candidateId: string, adminUser: { id: string; name: string }) {
     const release = await dbMutex.acquire();
     try {
-      const idx = this.data.candidates.findIndex((c) => c.id === candidateId);
-      if (idx === -1) throw new Error('Candidate not found');
+      const targetId = String(candidateId).trim().toLowerCase();
+      const idx = this.data.candidates.findIndex(
+        (c) =>
+          String(c.id).toLowerCase() === targetId ||
+          String(c.id).replace(/^cand-0*/, '') === targetId.replace(/^cand-0*/, '') ||
+          c.slug === targetId
+      );
+      if (idx === -1) {
+        return { success: true, message: 'Candidate already removed' };
+      }
 
       const deletedCandidate = this.data.candidates[idx];
       this.data.candidates.splice(idx, 1);
@@ -1141,23 +1149,52 @@ class DatabaseService {
   ) {
     const release = await dbMutex.acquire();
     try {
-      const idx = this.data.candidates.findIndex((c) => c.id === candidateId);
-      if (idx === -1) throw new Error('Candidate not found');
+      const targetId = String(candidateId).trim().toLowerCase();
+      let idx = this.data.candidates.findIndex(
+        (c) =>
+          String(c.id).toLowerCase() === targetId ||
+          String(c.id).replace(/^cand-0*/, '') === targetId.replace(/^cand-0*/, '') ||
+          c.slug === targetId
+      );
 
-      const prev = { ...this.data.candidates[idx] };
       const now = new Date().toISOString();
 
-      if (updates.name) {
+      if (idx === -1) {
+        // Upsert candidate if not present on server
+        const comp = this.data.competitions.find((c) => c.status === 'ACTIVE') || this.data.competitions[0];
+        const newCand: DBCandidate = {
+          id: candidateId,
+          competitionId: comp ? comp.id : 'comp-chc-benin-01',
+          name: updates.name ? updates.name.trim() : 'Contestant',
+          slug: (updates.name || candidateId)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, ''),
+          state: updates.state ? updates.state.trim() : 'Edo Contestant',
+          biography: updates.biography ? updates.biography.trim() : '',
+          image: updates.image?.trim() || '',
+          status: updates.status || 'ACTIVE',
+          sortOrder: typeof updates.sortOrder === 'number' ? updates.sortOrder : this.data.candidates.length + 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        this.data.candidates.push(newCand);
+        idx = this.data.candidates.length - 1;
+      }
+
+      const prev = { ...this.data.candidates[idx] };
+
+      if (updates.name !== undefined) {
         this.data.candidates[idx].name = updates.name.trim();
         this.data.candidates[idx].slug = updates.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)+/g, '');
       }
-      if (updates.state) this.data.candidates[idx].state = updates.state.trim();
-      if (updates.biography) this.data.candidates[idx].biography = updates.biography.trim();
-      if (updates.image) this.data.candidates[idx].image = updates.image.trim();
-      if (updates.status) this.data.candidates[idx].status = updates.status;
+      if (updates.state !== undefined) this.data.candidates[idx].state = updates.state.trim();
+      if (updates.biography !== undefined) this.data.candidates[idx].biography = updates.biography.trim();
+      if (updates.image !== undefined) this.data.candidates[idx].image = updates.image.trim();
+      if (updates.status !== undefined) this.data.candidates[idx].status = updates.status;
       if (typeof updates.sortOrder === 'number') this.data.candidates[idx].sortOrder = updates.sortOrder;
       this.data.candidates[idx].updatedAt = now;
 

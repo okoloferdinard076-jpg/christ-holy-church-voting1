@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Candidate, Competition, PaymentSettings } from './types';
-import { fetchPublicData, fetchPendingTransactionsCount } from './services/api';
+import {
+  fetchPublicData,
+  fetchPendingTransactionsCount,
+  getStoredCandidates,
+  setStoredCandidates,
+  matchCandidateId,
+} from './services/api';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { CandidateCard } from './components/CandidateCard';
@@ -64,7 +70,10 @@ export default function App() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
-  const [candidates, setCandidates] = useState<Candidate[]>(DEFAULT_CANDIDATES);
+  const [candidates, setCandidates] = useState<Candidate[]>(() => {
+    const stored = getStoredCandidates();
+    return stored.length > 0 ? stored : DEFAULT_CANDIDATES;
+  });
   const [totalVotes, setTotalVotes] = useState(0);
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
   const [activeNavTab, setActiveNavTab] = useState('home');
@@ -104,13 +113,27 @@ export default function App() {
     }
     try {
       const data = await fetchPublicData();
-      setCompetition(data.competition);
-      setCandidates(data.candidates && data.candidates.length > 0 ? data.candidates : DEFAULT_CANDIDATES);
-      setTotalVotes(data.totalApprovedVotes || 0);
-      setPaymentSettings(data.paymentSettings);
+      if (data.competition) setCompetition(data.competition);
+      if (typeof data.totalApprovedVotes === 'number') setTotalVotes(data.totalApprovedVotes);
+      if (data.paymentSettings) setPaymentSettings(data.paymentSettings);
+
+      const stored = getStoredCandidates();
+      if (stored.length > 0) {
+        // Merge latest approved votes from server into our stored customized candidate models
+        const merged = stored.map((sc) => {
+          const serverMatch = (data.candidates || []).find(
+            (c) => matchCandidateId(c.id, sc.id) || c.slug === sc.slug
+          );
+          return serverMatch ? { ...sc, approvedVotes: serverMatch.approvedVotes } : sc;
+        });
+        setCandidates(merged);
+      } else if (data.candidates && data.candidates.length > 0) {
+        setCandidates(data.candidates);
+        setStoredCandidates(data.candidates);
+      }
       setFetchError(null);
     } catch (err: any) {
-      // Don't crash UI, keep default state
+      // Don't crash UI, keep default/cached state
       console.warn('Syncing contest data in background:', err.message || err);
       if (candidates.length === 0) {
         setFetchError('Unable to reach server. Retrying...');
@@ -139,12 +162,23 @@ export default function App() {
   useEffect(() => {
     loadData(true);
     refreshPendingCount();
+
+    const handleCandidateUpdate = (e: any) => {
+      const updated = e.detail?.candidates || getStoredCandidates();
+      if (Array.isArray(updated) && updated.length > 0) {
+        setCandidates([...updated]);
+      }
+    };
+
+    window.addEventListener('chc_candidates_updated', handleCandidateUpdate);
+
     // Refresh contest data every 10 seconds
     const contestInterval = setInterval(() => loadData(true), 10000);
     // Real-time pending count poller for authenticated admins
     const notificationInterval = setInterval(refreshPendingCount, 6000);
 
     return () => {
+      window.removeEventListener('chc_candidates_updated', handleCandidateUpdate);
       clearInterval(contestInterval);
       clearInterval(notificationInterval);
     };

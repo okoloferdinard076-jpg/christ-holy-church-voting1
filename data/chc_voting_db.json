@@ -5,20 +5,20 @@
       "name": "Executive Admin",
       "email": "medicreceptor@gmail.com",
       "phone": "09017311644",
-      "passwordHash": "$2b$10$sioGqUDZrNKQ/qhPFQalPOD/bX4f2wFUSldIANlmprWDfeCU94NNe",
+      "passwordHash": "$2b$10$30FaE0ZjWldB4PushY.pReaALapcoFKABCgPEcQDMhiRDigv4vFBy",
       "role": "SUPER_ADMIN",
       "createdAt": "2026-08-21T14:32:09.193Z",
-      "updatedAt": "2026-08-25T20:44:34.275Z"
+      "updatedAt": "2026-08-25T21:20:15.514Z"
     },
     {
       "id": "usr-admin-02",
       "name": "Contest Presiding Admin",
       "email": "ferdinardokolo@gmail.com",
       "phone": "09017311644",
-      "passwordHash": "$2b$10$sioGqUDZrNKQ/qhPFQalPOD/bX4f2wFUSldIANlmprWDfeCU94NNe",
+      "passwordHash": "$2b$10$30FaE0ZjWldB4PushY.pReaALapcoFKABCgPEcQDMhiRDigv4vFBy",
       "role": "SUPER_ADMIN",
       "createdAt": "2026-08-21T21:07:32.409Z",
-      "updatedAt": "2026-08-25T20:44:34.275Z"
+      "updatedAt": "2026-08-25T21:20:15.514Z"
     },
     {
       "id": "usr-admin-03",
@@ -54,12 +54,12 @@
       "name": "Bro David Okolo",
       "slug": "bro-david-okolo",
       "state": "Edo Contestant",
-      "biography": "Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.",
-      "image": "",
+      "biography": "Updated bio test",
+      "image": "/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg",
       "status": "ACTIVE",
       "sortOrder": 1,
       "createdAt": "2026-08-25T20:40:00.000Z",
-      "updatedAt": "2026-08-25T20:40:00.000Z"
+      "updatedAt": "2026-08-25T21:20:22.234Z"
     },
     {
       "id": "cand-02",
@@ -68,11 +68,24 @@
       "slug": "bro-chiagozie-okafor",
       "state": "Yoruba Contestant",
       "biography": "Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.",
-      "image": "",
+      "image": "/api/uploads/receipt-1787690899699-d786499acc5167e0.jpg",
       "status": "ACTIVE",
       "sortOrder": 2,
       "createdAt": "2026-08-25T20:40:00.000Z",
-      "updatedAt": "2026-08-25T20:40:00.000Z"
+      "updatedAt": "2026-08-25T20:48:24.058Z"
+    },
+    {
+      "id": "cand-1787690978676-1174",
+      "competitionId": "comp-chc-benin-01",
+      "name": "Mr Timothy Peter(cilo)",
+      "slug": "mr-timothy-peter-cilo",
+      "state": "Igbo Contestant",
+      "biography": "",
+      "image": "/api/uploads/receipt-1787690927145-aa3ceb304da43f7f.jpg",
+      "status": "ACTIVE",
+      "sortOrder": 3,
+      "createdAt": "2026-08-25T20:49:38.676Z",
+      "updatedAt": "2026-08-25T20:49:38.676Z"
     }
   ],
   "voting_transactions": [],
@@ -489,6 +502,60 @@
       "entityId": "cand-1787690689015-623a",
       "previousValue": "{\"id\":\"cand-1787690689015-623a\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Sis Miracle James\",\"slug\":\"sis-miracle-james\",\"state\":\"Delta State\",\"biography\":\"Passionate praise leader and youth ambassador.\",\"image\":\"\",\"status\":\"ACTIVE\",\"sortOrder\":3,\"createdAt\":\"2026-08-25T20:44:49.015Z\",\"updatedAt\":\"2026-08-25T20:44:49.015Z\"}",
       "createdAt": "2026-08-25T20:44:49.019Z"
+    },
+    {
+      "id": "log-1787690888125-e81ee8",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "CANDIDATE_UPDATED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-01",
+      "previousValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo\",\"slug\":\"bro-david-okolo\",\"state\":\"Edo Contestant\",\"biography\":\"Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.\",\"image\":\"\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T20:40:00.000Z\"}",
+      "newValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo\",\"slug\":\"bro-david-okolo\",\"state\":\"Edo Contestant\",\"biography\":\"Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.\",\"image\":\"/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T20:48:08.124Z\"}",
+      "createdAt": "2026-08-25T20:48:08.124Z"
+    },
+    {
+      "id": "log-1787690904058-3d2f7f",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "CANDIDATE_UPDATED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-02",
+      "previousValue": "{\"id\":\"cand-02\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro Chiagozie Okafor\",\"slug\":\"bro-chiagozie-okafor\",\"state\":\"Yoruba Contestant\",\"biography\":\"Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.\",\"image\":\"\",\"status\":\"ACTIVE\",\"sortOrder\":2,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T20:40:00.000Z\"}",
+      "newValue": "{\"id\":\"cand-02\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro Chiagozie Okafor\",\"slug\":\"bro-chiagozie-okafor\",\"state\":\"Yoruba Contestant\",\"biography\":\"Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.\",\"image\":\"/api/uploads/receipt-1787690899699-d786499acc5167e0.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":2,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T20:48:24.058Z\"}",
+      "createdAt": "2026-08-25T20:48:24.058Z"
+    },
+    {
+      "id": "log-1787690978676-4a3ddc",
+      "actorUserId": "usr-admin-01",
+      "actorName": "Executive Admin",
+      "action": "CANDIDATE_CREATED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-1787690978676-1174",
+      "newValue": "{\"id\":\"cand-1787690978676-1174\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Mr Timothy Peter(cilo)\",\"slug\":\"mr-timothy-peter-cilo\",\"state\":\"Igbo Contestant\",\"biography\":\"\",\"image\":\"/api/uploads/receipt-1787690927145-aa3ceb304da43f7f.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":3,\"createdAt\":\"2026-08-25T20:49:38.676Z\",\"updatedAt\":\"2026-08-25T20:49:38.676Z\"}",
+      "createdAt": "2026-08-25T20:49:38.676Z"
+    },
+    {
+      "id": "log-1787692816401-6b1e86",
+      "actorUserId": "usr-admin-02",
+      "actorName": "Contest Presiding Admin",
+      "action": "CANDIDATE_UPDATED",
+      "entityType": "CANDIDATE",
+      "entityId": "cand-01",
+      "previousValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo\",\"slug\":\"bro-david-okolo\",\"state\":\"Edo Contestant\",\"biography\":\"Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.\",\"image\":\"/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T20:48:08.124Z\"}",
+      "newValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo (Updated)\",\"slug\":\"bro-david-okolo-updated\",\"state\":\"Edo Contestant\",\"biography\":\"Updated bio test\",\"image\":\"/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T21:20:16.401Z\"}",
+      "createdAt": "2026-08-25T21:20:16.401Z"
+    },
+    {
+      "id": "log-1787692822234-70e286",
+      "actorUserId": "usr-admin-02",
+      "actorName": "Contest Presiding Admin",
+      "action": "CANDIDATE_UPDATED",
+      "entityType": "CANDIDATE",
+      "entityId": "1",
+      "previousValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo (Updated)\",\"slug\":\"bro-david-okolo-updated\",\"state\":\"Edo Contestant\",\"biography\":\"Updated bio test\",\"image\":\"/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T21:20:16.401Z\"}",
+      "newValue": "{\"id\":\"cand-01\",\"competitionId\":\"comp-chc-benin-01\",\"name\":\"Bro David Okolo\",\"slug\":\"bro-david-okolo\",\"state\":\"Edo Contestant\",\"biography\":\"Updated bio test\",\"image\":\"/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg\",\"status\":\"ACTIVE\",\"sortOrder\":1,\"createdAt\":\"2026-08-25T20:40:00.000Z\",\"updatedAt\":\"2026-08-25T21:20:22.234Z\"}",
+      "createdAt": "2026-08-25T21:20:22.234Z"
     }
   ]
 }
