@@ -592,15 +592,68 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
 }
 
 /**
+ * Directly overrides and updates a candidate's total approved votes in Firestore.
+ * Saves immediately to the cloud `candidates` document.
+ * Subscribing clients (Leaderboard, Cards, Admin) receive the real-time push instantly.
+ */
+export async function setCandidateVotesInFirestore(
+  candidateId: string,
+  newVoteCount: number,
+  adminName = 'Admin'
+): Promise<{ success: boolean; message: string; candidateId: string; approvedVotes: number }> {
+  const db = getFirestoreDb();
+  const candDocRef = doc(db, 'candidates', candidateId);
+  const now = new Date().toISOString();
+  const safeCount = Math.max(0, Math.floor(Number(newVoteCount) || 0));
+
+  await setDoc(
+    candDocRef,
+    {
+      id: candidateId,
+      approvedVotes: safeCount,
+      updatedAt: now,
+      lastManualOverrideBy: adminName,
+      lastManualOverrideAt: now,
+    },
+    { merge: true }
+  );
+
+  return {
+    success: true,
+    message: `Total approved votes successfully updated to ${safeCount.toLocaleString()} in Firestore.`,
+    candidateId,
+    approvedVotes: safeCount,
+  };
+}
+
+/**
  * Adds or updates a candidate in Firestore.
+ * Safeguarded so existing approvedVotes are preserved unless explicitly passed.
  */
 export async function syncCandidateToFirestore(candidate: Candidate): Promise<void> {
   const db = getFirestoreDb();
   const candDocRef = doc(db, 'candidates', candidate.id);
   const now = new Date().toISOString();
 
+  // Guard: If document already exists, preserve non-zero approvedVotes if candidate.approvedVotes is 0 or undefined
+  let finalVotes = candidate.approvedVotes;
+  if (finalVotes === undefined || finalVotes === 0) {
+    try {
+      const snap = await getDoc(candDocRef);
+      if (snap.exists()) {
+        const existingData = snap.data();
+        if (typeof existingData.approvedVotes === 'number' && existingData.approvedVotes > 0) {
+          finalVotes = existingData.approvedVotes;
+        }
+      }
+    } catch (e) {
+      // quiet fallback
+    }
+  }
+
   const dataToSave = {
     ...candidate,
+    approvedVotes: typeof finalVotes === 'number' ? finalVotes : 0,
     updatedAt: now,
   };
 

@@ -1196,6 +1196,24 @@ class DatabaseService {
       if (updates.image !== undefined) this.data.candidates[idx].image = updates.image.trim();
       if (updates.status !== undefined) this.data.candidates[idx].status = updates.status;
       if (typeof updates.sortOrder === 'number') this.data.candidates[idx].sortOrder = updates.sortOrder;
+      if (typeof (updates as any).approvedVotes === 'number') {
+        const safeVotes = Math.max(0, Math.floor((updates as any).approvedVotes));
+        const candId = this.data.candidates[idx].id;
+        const currentLedgerTotal = this.data.vote_ledger
+          .filter((v) => v.candidateId === candId)
+          .reduce((acc, v) => acc + v.quantity, 0);
+        const diff = safeVotes - currentLedgerTotal;
+        if (diff !== 0) {
+          this.data.vote_ledger.push({
+            id: `vld-manual-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+            transactionId: `manual-override-${Date.now()}`,
+            competitionId: this.data.candidates[idx].competitionId,
+            candidateId: candId,
+            quantity: diff,
+            createdAt: now,
+          });
+        }
+      }
       this.data.candidates[idx].updatedAt = now;
 
       this.data.audit_logs.push({

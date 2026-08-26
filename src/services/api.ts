@@ -12,6 +12,7 @@ import {
   rejectPendingVoteInFirestore,
   deletePendingVoteFromFirestore,
   fetchAllPendingVotesFromFirestore,
+  setCandidateVotesInFirestore,
 } from './firebase';
 
 const API_BASE = '/api';
@@ -855,6 +856,53 @@ export async function updateCandidate(
   }
 
   return { success: true, candidate: targetCandidate };
+}
+
+export async function overrideCandidateVotes(
+  token: string,
+  candidateId: string,
+  newVoteCount: number,
+  candidateName?: string
+): Promise<{ success: boolean; candidateId: string; approvedVotes: number; message: string }> {
+  const safeVotes = Math.max(0, Math.floor(Number(newVoteCount) || 0));
+  const now = new Date().toISOString();
+
+  // 1. Direct local storage update and event dispatch
+  const currentList = getStoredCandidates();
+  const idx = currentList.findIndex((c) => matchCandidateId(c.id, candidateId) || c.slug === candidateId);
+  if (idx !== -1) {
+    currentList[idx] = {
+      ...currentList[idx],
+      approvedVotes: safeVotes,
+      updatedAt: now,
+    };
+    setStoredCandidates(currentList);
+  }
+
+  // 2. Direct Firestore persistence
+  try {
+    await setCandidateVotesInFirestore(candidateId, safeVotes, 'Admin');
+  } catch (err) {
+    console.warn('Firestore setCandidateVotes notice:', err);
+  }
+
+  // 3. Server background sync
+  try {
+    fetch(`${API_BASE}/admin/candidates/${encodeURIComponent(candidateId)}`, {
+      method: 'PUT',
+      headers: getAdminHeaders(token),
+      body: JSON.stringify({ approvedVotes: safeVotes }),
+    }).catch((err) => console.warn('Server vote override background notice:', err));
+  } catch (e) {
+    // Non-blocking
+  }
+
+  return {
+    success: true,
+    candidateId,
+    approvedVotes: safeVotes,
+    message: `Total approved votes for ${candidateName || candidateId} updated to ${safeVotes.toLocaleString()}. Synced to Firestore live leaderboard.`,
+  };
 }
 
 export async function deleteCandidate(

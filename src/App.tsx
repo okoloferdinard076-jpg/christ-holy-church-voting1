@@ -126,12 +126,15 @@ export default function App() {
 
       const stored = getStoredCandidates();
       if (stored.length > 0) {
-        // Merge latest approved votes from server into our stored customized candidate models
+        // Merge safely without overwriting non-zero stored/cloud votes with zero
         const merged = stored.map((sc) => {
           const serverMatch = (data.candidates || []).find(
             (c) => matchCandidateId(c.id, sc.id) || c.slug === sc.slug
           );
-          return serverMatch ? { ...sc, approvedVotes: serverMatch.approvedVotes } : sc;
+          if (serverMatch && typeof serverMatch.approvedVotes === 'number' && serverMatch.approvedVotes > 0) {
+            return { ...sc, approvedVotes: Math.max(sc.approvedVotes || 0, serverMatch.approvedVotes) };
+          }
+          return sc;
         });
         setCandidates(merged);
       } else if (data.candidates && data.candidates.length > 0) {

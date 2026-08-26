@@ -4,6 +4,7 @@ import {
   createCandidate,
   updateCandidate,
   deleteCandidate,
+  overrideCandidateVotes,
   uploadCandidatePhoto,
   matchCandidateId,
 } from '../../services/api';
@@ -28,6 +29,8 @@ import {
   Sparkles,
   Search,
   Zap,
+  Sliders,
+  TrendingUp,
 } from 'lucide-react';
 
 interface CandidateManagerProps {
@@ -52,6 +55,12 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
   const [image, setImage] = useState('');
   const [sortOrder, setSortOrder] = useState<number>(1);
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [approvedVotesInput, setApprovedVotesInput] = useState<number>(0);
+
+  // Card-level manual vote adjustment inputs & states
+  const [candidateVoteInputs, setCandidateVoteInputs] = useState<Record<string, number | string>>({});
+  const [savingVoteCandId, setSavingVoteCandId] = useState<string | null>(null);
+  const [savedSuccessCandId, setSavedSuccessCandId] = useState<string | null>(null);
 
   // Photo mode: 'upload' or 'url'
   const [photoMode, setPhotoMode] = useState<'upload' | 'url'>('upload');
@@ -85,6 +94,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setImage('');
     setSortOrder(candidates.length + 1);
     setStatus('ACTIVE');
+    setApprovedVotesInput(0);
     setPhotoMode('upload');
     setCompressionInfo(null);
     setIsAddOpen(true);
@@ -109,10 +119,41 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setImage(c.image || '');
     setSortOrder(c.sortOrder || 1);
     setStatus(c.status);
+    setApprovedVotesInput(c.approvedVotes || 0);
     setPhotoMode(c.image?.startsWith('http') && !c.image.includes('/api/uploads') ? 'url' : 'upload');
     setCompressionInfo(null);
     setIsAddOpen(false);
     setMessage(null);
+  };
+
+  // Direct Manual Vote Override saved straight to Firestore
+  const handleOverrideVotes = async (cand: Candidate, overrideValue?: number) => {
+    const rawVal = overrideValue !== undefined ? overrideValue : candidateVoteInputs[cand.id];
+    const newVotes = Math.max(
+      0,
+      Math.floor(Number(rawVal !== undefined && rawVal !== '' ? rawVal : cand.approvedVotes || 0))
+    );
+
+    setSavingVoteCandId(cand.id);
+    setMessage(null);
+
+    try {
+      const res = await overrideCandidateVotes(token, cand.id, newVotes, cand.name);
+      setSavedSuccessCandId(cand.id);
+      setTimeout(() => setSavedSuccessCandId(null), 3000);
+      setMessage({
+        type: 'success',
+        text: `✓ ${res.message}`,
+      });
+      onRefresh();
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.message || 'Failed to update votes in Firestore.',
+      });
+    } finally {
+      setSavingVoteCandId(null);
+    }
   };
 
   // Process, compress, and upload file
@@ -187,6 +228,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
           image: candImg,
           sortOrder: candSort,
           status,
+          approvedVotes: Number(approvedVotesInput) || 0,
         });
         setMessage({ type: 'success', text: `Contestant "${candName}" updated successfully.` });
         setEditingCandidate(null);
@@ -421,6 +463,115 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                   <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed font-normal">
                     {cand.biography || 'No biography provided.'}
                   </p>
+
+                  {/* Manual Vote Override / Edit Votes Panel */}
+                  <div className="mt-3.5 p-3 rounded-xl bg-amber-500/10 border border-amber-300/80 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-amber-950">
+                        <Vote className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Manual Vote Override / Edit Votes</span>
+                      </div>
+                      <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider">
+                        ● Firestore Live Sync
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[130px]">
+                        <span className="absolute left-3 top-2 text-xs font-bold text-slate-500">Votes:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={
+                            candidateVoteInputs[cand.id] !== undefined
+                              ? candidateVoteInputs[cand.id]
+                              : cand.approvedVotes || 0
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCandidateVoteInputs((prev) => ({
+                              ...prev,
+                              [cand.id]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
+                            }));
+                          }}
+                          className="w-full pl-16 pr-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-black text-blue-950 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={savingVoteCandId === cand.id}
+                        onClick={() => handleOverrideVotes(cand)}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                        title="Save and sync vote count to Firestore"
+                      >
+                        {savingVoteCandId === cand.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Saving...</span>
+                          </>
+                        ) : savedSuccessCandId === cand.id ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                            <span>Saved!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save to Firestore</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Quick Add / Adjust Increment Shortcuts */}
+                    <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-amber-200/60">
+                      <span className="text-[10px] font-bold text-amber-900/80 mr-1">Quick Add:</span>
+                      {[10, 50, 100, 500, 1000].map((increment) => (
+                        <button
+                          key={increment}
+                          type="button"
+                          disabled={savingVoteCandId === cand.id}
+                          onClick={() => {
+                            const current =
+                              candidateVoteInputs[cand.id] !== undefined && candidateVoteInputs[cand.id] !== ''
+                                ? Number(candidateVoteInputs[cand.id]) || 0
+                                : cand.approvedVotes || 0;
+                            const nextVal = current + increment;
+                            setCandidateVoteInputs((prev) => ({
+                              ...prev,
+                              [cand.id]: nextVal,
+                            }));
+                            handleOverrideVotes(cand, nextVal);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-white hover:bg-amber-100 active:scale-95 text-amber-950 font-bold text-[10px] border border-amber-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          +{increment}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={savingVoteCandId === cand.id}
+                        onClick={() => {
+                          const current =
+                            candidateVoteInputs[cand.id] !== undefined && candidateVoteInputs[cand.id] !== ''
+                              ? Number(candidateVoteInputs[cand.id]) || 0
+                              : cand.approvedVotes || 0;
+                          const nextVal = Math.max(0, current - 50);
+                          setCandidateVoteInputs((prev) => ({
+                            ...prev,
+                            [cand.id]: nextVal,
+                          }));
+                          handleOverrideVotes(cand, nextVal);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-white hover:bg-red-50 active:scale-95 text-red-700 font-bold text-[10px] border border-red-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        -50
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -739,6 +890,34 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                   placeholder="e.g. Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:border-blue-900 focus:outline-hidden text-slate-800 leading-relaxed"
                 />
+              </div>
+
+              {/* Total Approved Votes (Manual Vote Override) */}
+              <div className="bg-amber-500/10 p-3.5 rounded-2xl border border-amber-300/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-extrabold text-amber-950 flex items-center gap-1.5 text-xs">
+                    <Vote className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Total Approved Votes (Manual Vote Override)</span>
+                  </label>
+                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider">
+                    ● Direct Firestore Sync
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-600 leading-relaxed">
+                  Directly set or correct this candidate's verified total votes. Instantly updates the live leaderboard on all devices.
+                </p>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-500">Votes:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={approvedVotesInput}
+                    onChange={(e) => setApprovedVotesInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    className="w-full pl-16 pr-3.5 py-2.5 rounded-xl border border-amber-300 bg-white text-sm font-black text-blue-950 focus:border-amber-600 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                    placeholder="0"
+                  />
+                </div>
               </div>
 
               {/* Sort Order & Status */}
