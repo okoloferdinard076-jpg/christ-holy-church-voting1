@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import {
   getFirestore,
   collection,
@@ -7,13 +7,32 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   onSnapshot,
+  increment,
   Firestore,
   Unsubscribe,
   writeBatch,
 } from 'firebase/firestore';
 import { Candidate, Competition, PaymentSettings, VotingTransaction } from '../types';
 import defaultConfig from '../../firebase-applet-config.json';
+
+/**
+ * ============================================================================
+ * 1. FIREBASE CONFIGURATION PLACEHOLDER & CLIENT INITIALIZATION
+ * ============================================================================
+ * You can paste your Firebase credentials directly into the object below,
+ * or manage them dynamically from the Admin Settings / Cloud Connect panel.
+ */
+export const firebaseConfig: FirebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID",
+  firestoreDatabaseId: "ai-studio-chcbenincrownvot-a5846d5b-719e-465a-89b8-4070ce9ac385", // Optional custom database ID
+};
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -24,6 +43,32 @@ export interface FirebaseConfig {
   appId: string;
   firestoreDatabaseId?: string;
   measurementId?: string;
+}
+
+/**
+ * Public Voter Submission Data Model for the `pending_votes` Firestore collection
+ */
+export interface PendingVoteSubmission {
+  id?: string;
+  voterName: string;
+  phoneNumber: string;
+  email: string;
+  candidateId: string;
+  candidateName: string;
+  amountTransferred: number;
+  voteCount: number;
+  transactionId: string;
+  receiptImageBase64?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt?: string;
+  rejectionReason?: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedByName?: string;
+  rejectedAt?: string;
 }
 
 const STORAGE_KEY = 'chc_custom_firebase_config';
@@ -41,6 +86,12 @@ export function getActiveFirebaseConfig(): FirebaseConfig {
     console.warn('Could not parse custom Firebase config:', e);
   }
 
+  // If hardcoded placeholder has been modified with real keys
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && firebaseConfig.projectId !== "YOUR_PROJECT_ID") {
+    return firebaseConfig;
+  }
+
+  // Default to project applet config
   return {
     apiKey: defaultConfig.apiKey || '',
     authDomain: defaultConfig.authDomain || '',
@@ -123,13 +174,340 @@ export function reinitializeFirebase(): void {
   }
 }
 
-// -------------------------------------------------------------
-// Real-time Firestore Listeners & Database Operations
-// -------------------------------------------------------------
+/**
+ * ============================================================================
+ * 2. VOTER SUBMISSION & PENDING VOTES (Firestore Collection: `pending_votes`)
+ * ============================================================================
+ */
 
 /**
- * Subscribes to real-time updates for all candidates.
- * Invoked on the public voting page, leaderboard, and admin candidate manager.
+ * Saves voter submission with compressed proof to Firestore collection `pending_votes`.
+ */
+export async function savePendingVoteToFirestore(
+  submission: PendingVoteSubmission
+): Promise<{ success: boolean; id: string }> {
+  try {
+    const db = getFirestoreDb();
+    const docId = submission.transactionId || `vote_${Date.now()}`;
+    const voteDocRef = doc(db, 'pending_votes', docId);
+    const now = new Date().toISOString();
+
+    const payload: PendingVoteSubmission = {
+      voterName: submission.voterName,
+      phoneNumber: submission.phoneNumber,
+      email: submission.email || '',
+      candidateId: submission.candidateId,
+      candidateName: submission.candidateName,
+      amountTransferred: Number(submission.amountTransferred),
+      voteCount: Number(submission.voteCount),
+      transactionId: docId,
+      receiptImageBase64: submission.receiptImageBase64 || '',
+      status: 'pending',
+      createdAt: submission.createdAt || now,
+      updatedAt: now,
+    };
+
+    await setDoc(voteDocRef, payload, { merge: true });
+
+    // Also mirror to legacy transactions collection for full backwards-compatibility
+    const txDocRef = doc(db, 'transactions', docId);
+    await setDoc(
+      txDocRef,
+      {
+        id: docId,
+        paymentReference: docId,
+        voterName: submission.voterName,
+        voterPhone: submission.phoneNumber,
+        voterEmail: submission.email || '',
+        candidateId: submission.candidateId,
+        candidateName: submission.candidateName,
+        amountTransferred: Number(submission.amountTransferred),
+        expectedAmount: Number(submission.amountTransferred),
+        voteQuantity: Number(submission.voteCount),
+        bankTransactionId: docId,
+        receiptUrl: submission.receiptImageBase64 || '',
+        status: 'PENDING',
+        createdAt: submission.createdAt || now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    return { success: true, id: docId };
+  } catch (err: any) {
+    console.error('Firestore savePendingVote error:', err);
+    throw new Error(err.message || 'Failed to submit vote to Firestore.');
+  }
+}
+
+/**
+ * Subscribes to real-time updates for the `pending_votes` collection in Firestore.
+ * Ensures the Admin Dashboard gets live instant alerts when a voter submits on their phone.
+ */
+export function subscribeToPendingVotesRealtime(
+  onUpdate: (submissions: PendingVoteSubmission[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  try {
+    const db = getFirestoreDb();
+    const pendingCol = collection(db, 'pending_votes');
+
+    return onSnapshot(
+      pendingCol,
+      (snapshot) => {
+        const list: PendingVoteSubmission[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data() as Partial<PendingVoteSubmission>;
+          list.push({
+            id: docSnap.id,
+            voterName: d.voterName || 'Anonymous Voter',
+            phoneNumber: d.phoneNumber || '',
+            email: d.email || '',
+            candidateId: d.candidateId || '',
+            candidateName: d.candidateName || 'Candidate',
+            amountTransferred: typeof d.amountTransferred === 'number' ? d.amountTransferred : 0,
+            voteCount: typeof d.voteCount === 'number' ? d.voteCount : 1,
+            transactionId: d.transactionId || docSnap.id,
+            receiptImageBase64: d.receiptImageBase64 || '',
+            status: d.status || 'pending',
+            createdAt: d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt || new Date().toISOString(),
+            rejectionReason: d.rejectionReason,
+            approvedBy: d.approvedBy,
+            approvedByName: d.approvedByName,
+            approvedAt: d.approvedAt,
+            rejectedBy: d.rejectedBy,
+            rejectedByName: d.rejectedByName,
+            rejectedAt: d.rejectedAt,
+          });
+        });
+
+        // Sort descending by createdAt
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        onUpdate(list);
+      },
+      (err) => {
+        console.warn('Firestore pending_votes subscription error:', err);
+        if (onError) onError(err);
+      }
+    );
+  } catch (e: any) {
+    console.warn('Firestore pending_votes listener error:', e);
+    if (onError) onError(e);
+    return () => {};
+  }
+}
+
+/**
+ * Fetches all pending votes from Firestore.
+ */
+export async function fetchAllPendingVotesFromFirestore(): Promise<PendingVoteSubmission[]> {
+  try {
+    const db = getFirestoreDb();
+    const pendingCol = collection(db, 'pending_votes');
+    const snapshot = await getDocs(pendingCol);
+    const list: PendingVoteSubmission[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const d = docSnap.data() as Partial<PendingVoteSubmission>;
+      list.push({
+        id: docSnap.id,
+        voterName: d.voterName || 'Anonymous Voter',
+        phoneNumber: d.phoneNumber || '',
+        email: d.email || '',
+        candidateId: d.candidateId || '',
+        candidateName: d.candidateName || 'Candidate',
+        amountTransferred: typeof d.amountTransferred === 'number' ? d.amountTransferred : 0,
+        voteCount: typeof d.voteCount === 'number' ? d.voteCount : 1,
+        transactionId: d.transactionId || docSnap.id,
+        receiptImageBase64: d.receiptImageBase64 || '',
+        status: d.status || 'pending',
+        createdAt: d.createdAt || new Date().toISOString(),
+        updatedAt: d.updatedAt || new Date().toISOString(),
+        rejectionReason: d.rejectionReason,
+        approvedBy: d.approvedBy,
+        approvedByName: d.approvedByName,
+        approvedAt: d.approvedAt,
+        rejectedBy: d.rejectedBy,
+        rejectedByName: d.rejectedByName,
+        rejectedAt: d.rejectedAt,
+      });
+    });
+
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
+  } catch (e) {
+    console.warn('Error fetching all pending votes from Firestore:', e);
+    return [];
+  }
+}
+
+/**
+ * ============================================================================
+ * 3. ADMIN APPROVAL & REJECTION FLOW
+ * ============================================================================
+ */
+
+/**
+ * Approves a pending vote in Firestore:
+ * 1. Updates submission status to "approved" (in `pending_votes` and `transactions`).
+ * 2. Atomically increments the candidate's official vote count in the `candidates` collection.
+ */
+export async function approvePendingVoteInFirestore(
+  transactionId: string,
+  candidateId?: string,
+  voteCount?: number,
+  adminName = 'Admin'
+): Promise<{ success: boolean; message: string }> {
+  const db = getFirestoreDb();
+  const now = new Date().toISOString();
+
+  try {
+    // 1. Update `pending_votes`
+    const pendingRef = doc(db, 'pending_votes', transactionId);
+    const pendingSnap = await getDoc(pendingRef);
+
+    let effectiveCandidateId = candidateId;
+    let effectiveVoteCount = voteCount;
+
+    if (pendingSnap.exists()) {
+      const data = pendingSnap.data() as PendingVoteSubmission;
+      if (!effectiveCandidateId) effectiveCandidateId = data.candidateId;
+      if (!effectiveVoteCount) effectiveVoteCount = data.voteCount;
+
+      await updateDoc(pendingRef, {
+        status: 'approved',
+        approvedAt: now,
+        approvedBy: adminName,
+        approvedByName: adminName,
+        updatedAt: now,
+      });
+    }
+
+    // 2. Update `transactions` collection
+    const txRef = doc(db, 'transactions', transactionId);
+    const txSnap = await getDoc(txRef);
+    if (txSnap.exists()) {
+      const txData = txSnap.data();
+      if (!effectiveCandidateId) effectiveCandidateId = txData.candidateId;
+      if (!effectiveVoteCount) effectiveVoteCount = txData.voteQuantity;
+
+      await updateDoc(txRef, {
+        status: 'APPROVED',
+        approvedAt: now,
+        approvedBy: adminName,
+        approvedByName: adminName,
+        updatedAt: now,
+      });
+    }
+
+    // 3. Atomically increment the candidate's approved votes in the `candidates` collection
+    if (effectiveCandidateId && effectiveVoteCount && effectiveVoteCount > 0) {
+      const candRef = doc(db, 'candidates', effectiveCandidateId);
+      const candSnap = await getDoc(candRef);
+
+      if (candSnap.exists()) {
+        await updateDoc(candRef, {
+          approvedVotes: increment(effectiveVoteCount),
+          updatedAt: now,
+        });
+      } else {
+        // Create candidate entry with the vote count if not yet existing
+        await setDoc(
+          candRef,
+          {
+            id: effectiveCandidateId,
+            approvedVotes: effectiveVoteCount,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
+    }
+
+    return {
+      success: true,
+      message: `Vote approved successfully! ${effectiveVoteCount || 0} votes credited to contestant.`,
+    };
+  } catch (err: any) {
+    console.error('Firestore approval error:', err);
+    throw new Error(err.message || 'Failed to approve vote in Firestore.');
+  }
+}
+
+/**
+ * Rejects a pending vote in Firestore:
+ * Updates the submission status to "rejected" with the specified reason.
+ */
+export async function rejectPendingVoteInFirestore(
+  transactionId: string,
+  reason = 'Payment proof could not be verified.',
+  adminName = 'Admin'
+): Promise<{ success: boolean; message: string }> {
+  const db = getFirestoreDb();
+  const now = new Date().toISOString();
+
+  try {
+    // 1. Update `pending_votes`
+    const pendingRef = doc(db, 'pending_votes', transactionId);
+    const pendingSnap = await getDoc(pendingRef);
+    if (pendingSnap.exists()) {
+      await updateDoc(pendingRef, {
+        status: 'rejected',
+        rejectionReason: reason,
+        rejectedAt: now,
+        rejectedBy: adminName,
+        rejectedByName: adminName,
+        updatedAt: now,
+      });
+    }
+
+    // 2. Update `transactions`
+    const txRef = doc(db, 'transactions', transactionId);
+    const txSnap = await getDoc(txRef);
+    if (txSnap.exists()) {
+      await updateDoc(txRef, {
+        status: 'REJECTED',
+        rejectionReason: reason,
+        rejectedAt: now,
+        rejectedBy: adminName,
+        rejectedByName: adminName,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Vote submission has been rejected.',
+    };
+  } catch (err: any) {
+    console.error('Firestore rejection error:', err);
+    throw new Error(err.message || 'Failed to reject vote in Firestore.');
+  }
+}
+
+/**
+ * Deletes a submission completely from Firestore.
+ */
+export async function deletePendingVoteFromFirestore(transactionId: string): Promise<void> {
+  const db = getFirestoreDb();
+  try {
+    await deleteDoc(doc(db, 'pending_votes', transactionId));
+    await deleteDoc(doc(db, 'transactions', transactionId));
+  } catch (err) {
+    console.warn('Firestore deletePendingVote notice:', err);
+  }
+}
+
+/**
+ * ============================================================================
+ * 4. LIVE CANDIDATE LEADERBOARD & CANDIDATES COLLECTION
+ * ============================================================================
+ */
+
+/**
+ * Subscribes to real-time updates for all candidates in Firestore.
+ * Powers the live Leaderboard so every phone sees verified vote counts instantly.
  */
 export function subscribeToCandidatesRealtime(
   onUpdate: (candidates: Candidate[]) => void,
@@ -178,6 +556,42 @@ export function subscribeToCandidatesRealtime(
 }
 
 /**
+ * Fetches all candidates from Firestore once.
+ */
+export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
+  try {
+    const db = getFirestoreDb();
+    const candidatesCol = collection(db, 'candidates');
+    const snapshot = await getDocs(candidatesCol);
+    const list: Candidate[] = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Partial<Candidate>;
+      list.push({
+        id: docSnap.id,
+        competitionId: data.competitionId || 'comp-chc-benin-01',
+        name: data.name || 'Contestant',
+        slug: data.slug || docSnap.id,
+        state: data.state || 'Edo Contestant',
+        biography: data.biography || '',
+        image: data.image || '',
+        status: (data.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
+        sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 99,
+        approvedVotes: typeof data.approvedVotes === 'number' ? data.approvedVotes : 0,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+      });
+    });
+
+    list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
+    return list;
+  } catch (err) {
+    console.warn('Error fetching candidates from Firestore:', err);
+    return [];
+  }
+}
+
+/**
  * Adds or updates a candidate in Firestore.
  */
 export async function syncCandidateToFirestore(candidate: Candidate): Promise<void> {
@@ -218,7 +632,7 @@ export async function deleteCandidateFromFirestore(candidateId: string): Promise
 
 /**
  * Seeds initial candidates into Firestore if the collection is empty,
- * ensuring new devices immediately see contestants in cloud sync mode.
+ * ensuring all connected devices immediately share the cloud contestant list.
  */
 export async function seedInitialCandidatesIfEmpty(defaultList: Candidate[]): Promise<void> {
   try {
@@ -287,7 +701,7 @@ export function subscribeToCompetitionRealtime(
 }
 
 /**
- * Subscribes to real-time updates for Voting Transactions / Pending Proofs.
+ * Subscribes to real-time updates for Voting Transactions.
  */
 export function subscribeToTransactionsRealtime(
   onUpdate: (transactions: VotingTransaction[]) => void,
@@ -318,7 +732,7 @@ export function subscribeToTransactionsRealtime(
             amountTransferred: typeof data.amountTransferred === 'number' ? data.amountTransferred : 0,
             bankTransactionId: data.bankTransactionId || '',
             receiptUrl: data.receiptUrl || '',
-            status: data.status || 'PENDING',
+            status: (data.status as any) || 'PENDING',
             rejectionReason: data.rejectionReason,
             approvedBy: data.approvedBy,
             approvedByName: data.approvedByName,
@@ -426,7 +840,7 @@ export async function fetchTransactionsFromFirestore(): Promise<VotingTransactio
         amountTransferred: typeof data.amountTransferred === 'number' ? data.amountTransferred : 0,
         bankTransactionId: data.bankTransactionId || '',
         receiptUrl: data.receiptUrl || '',
-        status: data.status || 'PENDING',
+        status: (data.status as any) || 'PENDING',
         rejectionReason: data.rejectionReason,
         approvedBy: data.approvedBy,
         approvedByName: data.approvedByName,

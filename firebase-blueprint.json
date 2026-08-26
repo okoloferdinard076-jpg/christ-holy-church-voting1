@@ -20,6 +20,29 @@
       },
       "required": ["name", "state"]
     },
+    "PendingVote": {
+      "title": "PendingVote",
+      "description": "Pending voter submission with payment proof",
+      "type": "object",
+      "properties": {
+        "voterName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "candidateName": { "type": "string" },
+        "amountTransferred": { "type": "number" },
+        "voteCount": { "type": "number" },
+        "transactionId": { "type": "string" },
+        "receiptImageBase64": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "approvedAt": { "type": "string" },
+        "rejectedAt": { "type": "string" }
+      },
+      "required": ["voterName", "phoneNumber", "candidateId", "amountTransferred", "voteCount", "transactionId", "status"]
+    },
     "PaymentSettings": {
       "title": "PaymentSettings",
       "description": "Bank and vote settings",
@@ -40,6 +63,14 @@
     "candidates": {
       "entity": "Candidate",
       "description": "Contestants in the competition"
+    },
+    "pending_votes": {
+      "entity": "PendingVote",
+      "description": "Voter submissions and transaction verifications"
+    },
+    "transactions": {
+      "entity": "PendingVote",
+      "description": "Historical transactions and payment audit ledger"
     },
     "settings": {
       "entity": "PaymentSettings",

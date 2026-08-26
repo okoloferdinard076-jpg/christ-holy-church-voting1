@@ -7,6 +7,11 @@ import {
   updateTransactionInFirestore,
   deleteTransactionFromFirestore,
   fetchTransactionsFromFirestore,
+  savePendingVoteToFirestore,
+  approvePendingVoteInFirestore,
+  rejectPendingVoteInFirestore,
+  deletePendingVoteFromFirestore,
+  fetchAllPendingVotesFromFirestore,
 } from './firebase';
 
 const API_BASE = '/api';
@@ -140,13 +145,25 @@ export async function submitPaymentProof(params: {
   // 1. Direct synchronous persistence into localStorage under pendingVotes
   savePendingVoteLocally(tx);
 
-  // 2. Real-time Firestore Cloud persistence
+  // 2. Real-time Firestore Cloud persistence in `pending_votes` and `transactions`
   try {
-    syncTransactionToFirestore(tx).catch((err) =>
-      console.warn('Firestore transaction sync error:', err)
+    savePendingVoteToFirestore({
+      voterName: params.voterName.trim(),
+      phoneNumber: params.voterPhone.trim(),
+      email: params.voterEmail?.trim() || '',
+      candidateId: params.candidateId || '',
+      candidateName: params.candidateName || '',
+      amountTransferred: Number(params.amountTransferred),
+      voteCount: params.voteQuantity || Math.max(1, Math.floor(params.amountTransferred / 50)),
+      transactionId: params.paymentReference || tx.paymentReference,
+      receiptImageBase64: params.receiptUrl || '',
+      status: 'pending',
+      createdAt: now,
+    }).catch((err) =>
+      console.warn('Firestore pending_votes sync error:', err)
     );
   } catch (e) {
-    console.warn('Firestore transaction async push error:', e);
+    console.warn('Firestore pending vote async push error:', e);
   }
 
   // 3. Resilient server sync (non-blocking if offline/failing)
@@ -405,7 +422,35 @@ export async function fetchAdminPayments(
   const localVotes = getStoredPendingVotes();
   let firestoreTxs: VotingTransaction[] = [];
   try {
-    firestoreTxs = await fetchTransactionsFromFirestore();
+    const [txs, pendingVotes] = await Promise.all([
+      fetchTransactionsFromFirestore(),
+      fetchAllPendingVotesFromFirestore(),
+    ]);
+    
+    // Map pendingVotes to VotingTransaction format
+    const convertedPending: VotingTransaction[] = pendingVotes.map((pv) => ({
+      id: pv.transactionId || pv.id || `pv-${pv.createdAt}`,
+      paymentReference: pv.transactionId,
+      competitionId: 'comp-chc-benin-01',
+      candidateId: pv.candidateId,
+      candidateName: pv.candidateName,
+      voterName: pv.voterName,
+      voterEmail: pv.email || '',
+      voterPhone: pv.phoneNumber || '',
+      voteQuantity: pv.voteCount,
+      expectedAmount: pv.amountTransferred,
+      amountTransferred: pv.amountTransferred,
+      bankTransactionId: pv.transactionId,
+      receiptUrl: pv.receiptImageBase64 || '',
+      status: (pv.status.toUpperCase() as any) || 'PENDING',
+      rejectionReason: pv.rejectionReason,
+      approvedAt: pv.approvedAt,
+      rejectedAt: pv.rejectedAt,
+      createdAt: pv.createdAt,
+      updatedAt: pv.updatedAt || pv.createdAt,
+    }));
+
+    firestoreTxs = [...txs, ...convertedPending];
   } catch (e) {
     // Non-blocking
   }
@@ -496,11 +541,15 @@ export async function approvePayment(token: string, transactionId: string) {
     }
   }
 
-  // 2. Real-time Firestore Cloud update
-  updateTransactionInFirestore(transactionId, {
-    status: 'APPROVED',
-    approvedAt: now,
-  }).catch(() => {});
+  // 2. Real-time Firestore Cloud approval and candidate vote increment
+  approvePendingVoteInFirestore(
+    transactionId,
+    target?.candidateId,
+    target?.voteQuantity,
+    'Admin'
+  ).catch((err) => {
+    console.warn('Firestore approve pending vote notice:', err);
+  });
 
   // 3. Server backend approval
   try {
@@ -528,12 +577,10 @@ export async function rejectPayment(token: string, transactionId: string, reason
     rejectedAt: now,
   });
 
-  // 2. Real-time Firestore Cloud update
-  updateTransactionInFirestore(transactionId, {
-    status: 'REJECTED',
-    rejectionReason: reason,
-    rejectedAt: now,
-  }).catch(() => {});
+  // 2. Real-time Firestore Cloud rejection
+  rejectPendingVoteInFirestore(transactionId, reason, 'Admin').catch((err) => {
+    console.warn('Firestore reject pending vote notice:', err);
+  });
 
   // 3. Server backend rejection
   try {
@@ -557,7 +604,7 @@ export async function deletePayment(token: string, transactionId: string) {
   deletePendingVoteLocally(transactionId);
 
   // 2. Firestore deletion
-  deleteTransactionFromFirestore(transactionId).catch(() => {});
+  deletePendingVoteFromFirestore(transactionId).catch(() => {});
 
   // 3. Server deletion
   try {

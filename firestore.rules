@@ -1,8 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    
+    // Candidates collection - public read for leaderboard, write allowed for admin/vote tallying
+    match /candidates/{candidateId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Pending votes collection - public create for voters submitting proof, read & update for admin verification
+    match /pending_votes/{voteId} {
+      allow read: if true;
+      allow create: if request.resource.data.voterName is string &&
+                      request.resource.data.candidateId is string &&
+                      request.resource.data.amountTransferred is number &&
+                      request.resource.data.voteCount is number;
+      allow update, delete: if true;
+    }
+
+    // Transactions collection - historical audit ledger
+    match /transactions/{transactionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Settings collection - payment bank details and vote rates
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Competition details
+    match /competition/{compDoc} {
+      allow read: if true;
+      allow write: if true;
     }
   }
 }
