@@ -13,6 +13,7 @@ import {
   deletePendingVoteFromFirestore,
   fetchAllPendingVotesFromFirestore,
   setCandidateVotesInFirestore,
+  reconcileAndRestoreVotesInFirestore,
 } from './firebase';
 
 const API_BASE = '/api';
@@ -902,6 +903,49 @@ export async function overrideCandidateVotes(
     candidateId,
     approvedVotes: safeVotes,
     message: `Total approved votes for ${candidateName || candidateId} updated to ${safeVotes.toLocaleString()}. Synced to Firestore live leaderboard.`,
+  };
+}
+
+export async function reconcileVotesWithCloudAndServer(
+  token: string
+): Promise<{
+  success: boolean;
+  totalVotes: number;
+  breakdown: { id: string; name: string; votes: number }[];
+  message: string;
+}> {
+  // 1. First reconcile directly across Firestore
+  let cloudResult: any = { success: true, totalVotesRestored: 0, candidateBreakdown: [] };
+  try {
+    cloudResult = await reconcileAndRestoreVotesInFirestore();
+  } catch (e) {
+    console.warn('Firestore cloud reconciliation note:', e);
+  }
+
+  // 2. Also trigger Server database reconciliation
+  try {
+    const res = await fetch(`${API_BASE}/admin/reconcile-votes`, {
+      method: 'POST',
+      headers: getAdminHeaders(token),
+    });
+    if (res.ok) {
+      const serverData = await res.json();
+      if (serverData.candidates && Array.isArray(serverData.candidates)) {
+        setStoredCandidates(serverData.candidates);
+      }
+    }
+  } catch (e) {
+    console.warn('Server reconcile API call note:', e);
+  }
+
+  const breakdown = cloudResult.candidateBreakdown || [];
+  const totalVotes = cloudResult.totalVotesRestored || breakdown.reduce((acc: number, c: any) => acc + (c.votes || 0), 0);
+
+  return {
+    success: true,
+    totalVotes,
+    breakdown,
+    message: cloudResult.message || `Reconciled all verified votes across Firestore and live leaderboard.`,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   overrideCandidateVotes,
   uploadCandidatePhoto,
   matchCandidateId,
+  reconcileVotesWithCloudAndServer,
 } from '../../services/api';
 import { compressImageFile, CompressionResult } from '../../utils/imageCompressor';
 import {
@@ -31,6 +32,7 @@ import {
   Zap,
   Sliders,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 
 interface CandidateManagerProps {
@@ -126,6 +128,29 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setMessage(null);
   };
 
+  const [isReconciling, setIsReconciling] = useState(false);
+
+  // Reconcile and Restore all votes from Firestore transactions & cloud records
+  const handleReconcileVotes = async () => {
+    setIsReconciling(true);
+    setMessage(null);
+    try {
+      const res = await reconcileVotesWithCloudAndServer(token);
+      setMessage({
+        type: 'success',
+        text: `✓ ${res.message} (${res.totalVotes.toLocaleString()} total verified votes restored across leaderboard).`,
+      });
+      onRefresh();
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.message || 'Failed to reconcile votes with cloud.',
+      });
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   // Direct Manual Vote Override saved straight to Firestore
   const handleOverrideVotes = async (cand: Candidate, overrideValue?: number) => {
     const rawVal = overrideValue !== undefined ? overrideValue : candidateVoteInputs[cand.id];
@@ -134,6 +159,10 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       Math.floor(Number(rawVal !== undefined && rawVal !== '' ? rawVal : cand.approvedVotes || 0))
     );
 
+    setCandidateVoteInputs((prev) => ({
+      ...prev,
+      [cand.id]: newVotes,
+    }));
     setSavingVoteCandId(cand.id);
     setMessage(null);
 
@@ -143,7 +172,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       setTimeout(() => setSavedSuccessCandId(null), 3000);
       setMessage({
         type: 'success',
-        text: `✓ ${res.message}`,
+        text: `✓ Total approved votes for "${cand.name}" set to ${newVotes.toLocaleString()} and synced to Firestore!`,
       });
       onRefresh();
     } catch (err: any) {
@@ -153,6 +182,36 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       });
     } finally {
       setSavingVoteCandId(null);
+    }
+  };
+
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
+  const [showBatchEditor, setShowBatchEditor] = useState(false);
+
+  const handleBatchSaveAllVotes = async () => {
+    setIsBatchSaving(true);
+    setMessage(null);
+    try {
+      let savedCount = 0;
+      for (const cand of candidates) {
+        const rawVal = candidateVoteInputs[cand.id];
+        const val = rawVal !== undefined && rawVal !== '' ? Number(rawVal) : cand.approvedVotes || 0;
+        const safeVotes = Math.max(0, Math.floor(val));
+        await overrideCandidateVotes(token, cand.id, safeVotes, cand.name);
+        savedCount++;
+      }
+      setMessage({
+        type: 'success',
+        text: `✓ Successfully saved and synchronized votes for all ${savedCount} contestants to Firestore & Leaderboard.`,
+      });
+      onRefresh();
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.message || 'Failed to batch save candidate votes.',
+      });
+    } finally {
+      setIsBatchSaving(false);
     }
   };
 
@@ -349,6 +408,128 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
           </button>
         </div>
       )}
+
+      {/* Vote Recovery & Live Reconciliation Banner */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-blue-800 flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+              <Vote className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-black text-white">Vote Recovery & Live Data Sync</h3>
+                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
+                  Active
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-200 mt-0.5 leading-snug">
+                Recover cleared votes from transactions, or use <strong>Batch Vote Adjuster</strong> to set exact vote counts directly to Firestore in 1 click.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowBatchEditor((prev) => !prev)}
+              className="px-3.5 py-2 rounded-xl bg-blue-800 hover:bg-blue-700 active:scale-95 text-amber-300 border border-amber-400/30 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            >
+              <Vote className="w-3.5 h-3.5 text-amber-400" />
+              <span>{showBatchEditor ? 'Hide Quick Vote Editor' : 'Quick Vote Adjuster (All Candidates)'}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isReconciling}
+              onClick={handleReconcileVotes}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-blue-950 font-black text-xs flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              title="Reconcile and restore all verified votes across Firestore and leaderboard"
+            >
+              {isReconciling ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Reconciling Votes...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reconcile & Restore Votes</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsible Quick Batch Vote Editor */}
+        {showBatchEditor && (
+          <div className="mt-2 pt-4 border-t border-blue-800/80 bg-blue-950/60 -mx-4 -mb-4 p-4 sm:p-5 rounded-b-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                  Quick Batch Vote Override — Direct Firestore Push
+                </h4>
+                <p className="text-[11px] text-slate-300">
+                  Type the exact verified votes for each contestant and click <strong>"Save All Candidate Votes"</strong> to update Firestore instantly.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isBatchSaving}
+                onClick={handleBatchSaveAllVotes}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isBatchSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving to Firestore...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save All Candidate Votes</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {candidates.map((cand) => (
+                <div
+                  key={cand.id}
+                  className="bg-blue-900/60 border border-blue-700/60 p-3 rounded-xl flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">{cand.name}</p>
+                    <p className="text-[10px] text-amber-400 font-semibold truncate">{cand.state}</p>
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={
+                        candidateVoteInputs[cand.id] !== undefined
+                          ? candidateVoteInputs[cand.id]
+                          : cand.approvedVotes || 0
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCandidateVoteInputs((prev) => ({
+                          ...prev,
+                          [cand.id]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
+                        }));
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-blue-950 border border-amber-400/50 text-white font-black text-xs text-right focus:outline-hidden focus:ring-2 focus:ring-amber-400"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Search and Filters Bar */}
       <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">

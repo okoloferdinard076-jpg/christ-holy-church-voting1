@@ -535,6 +535,21 @@ router.put('/admin/payment-settings', requireAdmin, async (req: AuthenticatedReq
   }
 });
 
+// Reconcile and Restore Votes across all transactions and ledger
+router.post('/admin/reconcile-votes', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminUser = req.adminUser!;
+    const contestData = await db.reconcileVotes(adminUser);
+    res.json({
+      success: true,
+      message: 'Votes successfully reconciled and restored from all approved transactions.',
+      ...contestData,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || 'Failed to reconcile votes' });
+  }
+});
+
 // Candidate Management
 router.post('/admin/candidates', requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {

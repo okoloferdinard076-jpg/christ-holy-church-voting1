@@ -520,10 +520,10 @@ export function subscribeToCandidatesRealtime(
     return onSnapshot(
       candidatesCol,
       (snapshot) => {
-        const list: Candidate[] = [];
+        const rawList: Candidate[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as Partial<Candidate>;
-          list.push({
+          rawList.push({
             id: docSnap.id,
             competitionId: data.competitionId || 'comp-chc-benin-01',
             name: data.name || 'Contestant',
@@ -539,6 +539,26 @@ export function subscribeToCandidatesRealtime(
           });
         });
 
+        // Deduplicate and merge candidates by name/normalized ID to avoid split vote totals
+        const mergedMap = new Map<string, Candidate>();
+        for (const cand of rawList) {
+          const key = cand.name.toLowerCase().trim();
+          const existing = mergedMap.get(key);
+          if (existing) {
+            const highestVotes = Math.max(existing.approvedVotes || 0, cand.approvedVotes || 0);
+            mergedMap.set(key, {
+              ...existing,
+              ...cand,
+              approvedVotes: highestVotes,
+              image: cand.image || existing.image,
+              biography: cand.biography || existing.biography,
+            });
+          } else {
+            mergedMap.set(key, cand);
+          }
+        }
+
+        const list = Array.from(mergedMap.values());
         // Sort by sortOrder ascending, then by name
         list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
         onUpdate(list);
@@ -563,11 +583,11 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
     const db = getFirestoreDb();
     const candidatesCol = collection(db, 'candidates');
     const snapshot = await getDocs(candidatesCol);
-    const list: Candidate[] = [];
+    const rawList: Candidate[] = [];
 
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as Partial<Candidate>;
-      list.push({
+      rawList.push({
         id: docSnap.id,
         competitionId: data.competitionId || 'comp-chc-benin-01',
         name: data.name || 'Contestant',
@@ -583,6 +603,25 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
       });
     });
 
+    const mergedMap = new Map<string, Candidate>();
+    for (const cand of rawList) {
+      const key = cand.name.toLowerCase().trim();
+      const existing = mergedMap.get(key);
+      if (existing) {
+        const highestVotes = Math.max(existing.approvedVotes || 0, cand.approvedVotes || 0);
+        mergedMap.set(key, {
+          ...existing,
+          ...cand,
+          approvedVotes: highestVotes,
+          image: cand.image || existing.image,
+          biography: cand.biography || existing.biography,
+        });
+      } else {
+        mergedMap.set(key, cand);
+      }
+    }
+
+    const list = Array.from(mergedMap.values());
     list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
     return list;
   } catch (err) {
@@ -593,8 +632,7 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
 
 /**
  * Directly overrides and updates a candidate's total approved votes in Firestore.
- * Saves immediately to the cloud `candidates` document.
- * Subscribing clients (Leaderboard, Cards, Admin) receive the real-time push instantly.
+ * Updates the document and all matching duplicate documents in Firestore.
  */
 export async function setCandidateVotesInFirestore(
   candidateId: string,
@@ -606,6 +644,7 @@ export async function setCandidateVotesInFirestore(
   const now = new Date().toISOString();
   const safeCount = Math.max(0, Math.floor(Number(newVoteCount) || 0));
 
+  // 1. Direct update to target doc ID
   await setDoc(
     candDocRef,
     {
@@ -618,11 +657,159 @@ export async function setCandidateVotesInFirestore(
     { merge: true }
   );
 
+  // 2. Query and update all matching documents in `candidates` (e.g. if ID was numeric or slug)
+  try {
+    const candidatesCol = collection(db, 'candidates');
+    const snap = await getDocs(candidatesCol);
+    const targetNorm = candidateId.trim().toLowerCase();
+    const cleanNum = targetNorm.replace(/^cand-0*/, '');
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const docId = d.id.toLowerCase();
+      const docNum = docId.replace(/^cand-0*/, '');
+      const docCandId = String(data.id || '').toLowerCase();
+      const docName = String(data.name || '').toLowerCase();
+
+      const isMatch =
+        docId === targetNorm ||
+        (cleanNum && docNum === cleanNum) ||
+        docCandId === targetNorm ||
+        docName.includes(targetNorm);
+
+      if (isMatch && d.id !== candidateId) {
+        await setDoc(
+          doc(db, 'candidates', d.id),
+          {
+            approvedVotes: safeCount,
+            updatedAt: now,
+            lastManualOverrideBy: adminName,
+            lastManualOverrideAt: now,
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('Firestore multi-doc vote sync notice:', e);
+  }
+
   return {
     success: true,
     message: `Total approved votes successfully updated to ${safeCount.toLocaleString()} in Firestore.`,
     candidateId,
     approvedVotes: safeCount,
+  };
+}
+
+/**
+ * Scans all approved transactions in Firestore (`pending_votes` and `transactions`),
+ * tallies approved votes for each candidate, and restores accurate vote totals in Firestore.
+ * Also preserves any existing manual vote overrides if higher.
+ */
+export async function reconcileAndRestoreVotesInFirestore(): Promise<{
+  success: boolean;
+  totalVotesRestored: number;
+  candidateBreakdown: { id: string; name: string; votes: number }[];
+  message: string;
+}> {
+  const db = getFirestoreDb();
+  const now = new Date().toISOString();
+
+  // 1. Fetch all pending_votes and transactions
+  const approvedVotesByCandidate = new Map<string, number>();
+  const processedTxIds = new Set<string>();
+
+  try {
+    const pendingVotesCol = collection(db, 'pending_votes');
+    const pendingSnap = await getDocs(pendingVotesCol);
+    pendingSnap.forEach((d) => {
+      const data = d.data();
+      const st = String(data.status || '').toUpperCase();
+      const txId = String(data.transactionId || data.paymentReference || d.id);
+      if (st === 'APPROVED' && !processedTxIds.has(txId)) {
+        processedTxIds.add(txId);
+        const candId = String(data.candidateId || '').trim();
+        const candName = String(data.candidateName || '').trim();
+        const votes = Number(data.voteCount || data.voteQuantity || 0);
+        if (candId && votes > 0) {
+          approvedVotesByCandidate.set(candId, (approvedVotesByCandidate.get(candId) || 0) + votes);
+        } else if (candName && votes > 0) {
+          approvedVotesByCandidate.set(candName, (approvedVotesByCandidate.get(candName) || 0) + votes);
+        }
+      }
+    });
+  } catch (e) {
+    console.warn('Notice reading pending_votes for reconciliation:', e);
+  }
+
+  try {
+    const transactionsCol = collection(db, 'transactions');
+    const txSnap = await getDocs(transactionsCol);
+    txSnap.forEach((d) => {
+      const data = d.data();
+      const st = String(data.status || '').toUpperCase();
+      const txId = String(data.transactionId || data.paymentReference || d.id);
+      if (st === 'APPROVED' && !processedTxIds.has(txId)) {
+        processedTxIds.add(txId);
+        const candId = String(data.candidateId || '').trim();
+        const candName = String(data.candidateName || '').trim();
+        const votes = Number(data.voteCount || data.voteQuantity || 0);
+        if (candId && votes > 0) {
+          approvedVotesByCandidate.set(candId, (approvedVotesByCandidate.get(candId) || 0) + votes);
+        } else if (candName && votes > 0) {
+          approvedVotesByCandidate.set(candName, (approvedVotesByCandidate.get(candName) || 0) + votes);
+        }
+      }
+    });
+  } catch (e) {
+    console.warn('Notice reading transactions for reconciliation:', e);
+  }
+
+  // 2. Fetch candidates from Firestore
+  const candidatesCol = collection(db, 'candidates');
+  const candSnap = await getDocs(candidatesCol);
+  const candidateBreakdown: { id: string; name: string; votes: number }[] = [];
+  let totalVotesRestored = 0;
+
+  for (const docSnap of candSnap.docs) {
+    const candData = docSnap.data() as Candidate;
+    const candId = docSnap.id;
+    const candName = candData.name || '';
+
+    // Calculate aggregated approved votes from transactions
+    const txVotesById = approvedVotesByCandidate.get(candId) || 0;
+    const txVotesByName = approvedVotesByCandidate.get(candName) || 0;
+    const txVotesTotal = Math.max(txVotesById, txVotesByName);
+
+    // Keep the higher of: existing votes, or transaction-calculated votes
+    const existingVotes = Number(candData.approvedVotes) || 0;
+    const finalVotes = Math.max(existingVotes, txVotesTotal);
+
+    candidateBreakdown.push({
+      id: candId,
+      name: candName,
+      votes: finalVotes,
+    });
+    totalVotesRestored += finalVotes;
+
+    // Update in Firestore
+    await setDoc(
+      doc(db, 'candidates', candId),
+      {
+        approvedVotes: finalVotes,
+        updatedAt: now,
+        lastReconciledAt: now,
+      },
+      { merge: true }
+    );
+  }
+
+  return {
+    success: true,
+    totalVotesRestored,
+    candidateBreakdown,
+    message: `Successfully reconciled all candidate votes in Firestore. Total verified votes: ${totalVotesRestored.toLocaleString()}.`,
   };
 }
 

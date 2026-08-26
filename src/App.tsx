@@ -35,11 +35,11 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     state: 'Edo Contestant',
     biography:
       'Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.',
-    image: '',
+    image: '/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg',
     status: 'ACTIVE',
     sortOrder: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: '2026-08-25T20:40:00.000Z',
+    updatedAt: '2026-08-25T21:20:22.234Z',
     approvedVotes: 0,
   },
   {
@@ -50,11 +50,26 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     state: 'Yoruba Contestant',
     biography:
       'Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.',
-    image: '',
+    image: '/api/uploads/receipt-1787690899699-d786499acc5167e0.jpg',
     status: 'ACTIVE',
     sortOrder: 2,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: '2026-08-25T20:40:00.000Z',
+    updatedAt: '2026-08-25T20:48:24.058Z',
+    approvedVotes: 0,
+  },
+  {
+    id: 'cand-1787690978676-1174',
+    competitionId: 'comp-chc-benin-01',
+    name: 'Mr Timothy Peter(cilo)',
+    slug: 'mr-timothy-peter-cilo',
+    state: 'Igbo Contestant',
+    biography:
+      'Dynamic youth member and ambassadorial contestant representing Igbo Contestant at Christ Holy Church International No. 2 Benin.',
+    image: '/api/uploads/receipt-1787690927145-aa3ceb304da43f7f.jpg',
+    status: 'ACTIVE',
+    sortOrder: 3,
+    createdAt: '2026-08-25T20:49:38.676Z',
+    updatedAt: '2026-08-25T20:49:38.676Z',
     approvedVotes: 0,
   },
 ];
@@ -124,22 +139,40 @@ export default function App() {
       if (typeof data.totalApprovedVotes === 'number') setTotalVotes(data.totalApprovedVotes);
       if (data.paymentSettings) setPaymentSettings(data.paymentSettings);
 
-      const stored = getStoredCandidates();
-      if (stored.length > 0) {
-        // Merge safely without overwriting non-zero stored/cloud votes with zero
-        const merged = stored.map((sc) => {
-          const serverMatch = (data.candidates || []).find(
-            (c) => matchCandidateId(c.id, sc.id) || c.slug === sc.slug
-          );
-          if (serverMatch && typeof serverMatch.approvedVotes === 'number' && serverMatch.approvedVotes > 0) {
-            return { ...sc, approvedVotes: Math.max(sc.approvedVotes || 0, serverMatch.approvedVotes) };
-          }
-          return sc;
+      if (data.candidates && data.candidates.length > 0) {
+        const stored = getStoredCandidates();
+        // Create full list preserving all candidates and their highest vote totals
+        const combinedMap = new Map<string, Candidate>();
+        
+        // 1. Add server candidates
+        data.candidates.forEach((dc) => {
+          combinedMap.set(dc.id, dc);
         });
-        setCandidates(merged);
-      } else if (data.candidates && data.candidates.length > 0) {
-        setCandidates(data.candidates);
-        setStoredCandidates(data.candidates);
+
+        // 2. Merge stored candidates
+        stored.forEach((sc) => {
+          const existing = combinedMap.get(sc.id);
+          if (existing) {
+            const highestVotes = Math.max(existing.approvedVotes || 0, sc.approvedVotes || 0);
+            combinedMap.set(sc.id, {
+              ...existing,
+              ...sc,
+              approvedVotes: highestVotes,
+              image: sc.image || existing.image,
+            });
+          } else {
+            combinedMap.set(sc.id, sc);
+          }
+        });
+
+        const mergedList = Array.from(combinedMap.values()).sort(
+          (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name)
+        );
+
+        setCandidates(mergedList);
+        setStoredCandidates(mergedList);
+        const calcTotal = mergedList.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
+        setTotalVotes(Math.max(data.totalApprovedVotes || 0, calcTotal));
       }
       setFetchError(null);
     } catch (err: any) {

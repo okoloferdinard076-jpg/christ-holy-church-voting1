@@ -215,7 +215,7 @@ function getDefaultDatabase(): DBSchema {
         state: 'Edo Contestant',
         biography:
           'Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.',
-        image: '',
+        image: '/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg',
         status: 'ACTIVE',
         sortOrder: 1,
         createdAt: now,
@@ -229,9 +229,23 @@ function getDefaultDatabase(): DBSchema {
         state: 'Yoruba Contestant',
         biography:
           'Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.',
-        image: '',
+        image: '/api/uploads/receipt-1787690899699-d786499acc5167e0.jpg',
         status: 'ACTIVE',
         sortOrder: 2,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'cand-1787690978676-1174',
+        competitionId,
+        name: 'Mr Timothy Peter(cilo)',
+        slug: 'mr-timothy-peter-cilo',
+        state: 'Igbo Contestant',
+        biography:
+          'Dynamic youth member and ambassadorial contestant representing Igbo Contestant at Christ Holy Church International No. 2 Benin.',
+        image: '/api/uploads/receipt-1787690927145-aa3ceb304da43f7f.jpg',
+        status: 'ACTIVE',
+        sortOrder: 3,
         createdAt: now,
         updatedAt: now,
       },
@@ -366,10 +380,12 @@ class DatabaseService {
       .filter((c) => c.competitionId === comp.id && c.status === 'ACTIVE')
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((cand) => {
-        const votes = candidateVotesMap.get(cand.id) || 0;
+        const ledgerVotes = candidateVotesMap.get(cand.id) || 0;
+        const candDirectVotes = (cand as any).approvedVotes || 0;
+        const finalVotes = Math.max(ledgerVotes, candDirectVotes);
         return {
           ...cand,
-          approvedVotes: votes,
+          approvedVotes: finalVotes,
         };
       });
 
@@ -1199,8 +1215,9 @@ class DatabaseService {
       if (typeof (updates as any).approvedVotes === 'number') {
         const safeVotes = Math.max(0, Math.floor((updates as any).approvedVotes));
         const candId = this.data.candidates[idx].id;
+        (this.data.candidates[idx] as any).approvedVotes = safeVotes;
         const currentLedgerTotal = this.data.vote_ledger
-          .filter((v) => v.candidateId === candId)
+          .filter((v) => v.candidateId === candId || v.candidateId === this.data.candidates[idx].slug)
           .reduce((acc, v) => acc + v.quantity, 0);
         const diff = safeVotes - currentLedgerTotal;
         if (diff !== 0) {
@@ -1230,6 +1247,74 @@ class DatabaseService {
 
       this.persistSync(this.data);
       return this.data.candidates[idx];
+    } finally {
+      release();
+    }
+  }
+
+  // --- Reconcile and Restore Votes from Approved Transactions ---
+  async reconcileVotes(adminUser: { id: string; name: string }) {
+    const release = await dbMutex.acquire();
+    try {
+      const now = new Date().toISOString();
+      const approvedTxs = this.data.voting_transactions.filter((t) => {
+        const st = String(t.status || '').toUpperCase();
+        return st === 'APPROVED' || st === 'VERIFIED';
+      });
+      
+      // Map candidate votes from approved transactions
+      const candVotesMap = new Map<string, number>();
+      for (const tx of approvedTxs) {
+        const qty = tx.voteQuantity || Math.max(1, Math.floor((tx.amountTransferred || tx.expectedAmount) / 50));
+        const cId = String(tx.candidateId || '').trim();
+        candVotesMap.set(cId, (candVotesMap.get(cId) || 0) + qty);
+      }
+
+      // Rebuild vote_ledger preserving manual overrides
+      const manualEntries = this.data.vote_ledger.filter((v) => v.transactionId.startsWith('manual-override-'));
+      this.data.vote_ledger = [...manualEntries];
+
+      for (const tx of approvedTxs) {
+        const qty = tx.voteQuantity || Math.max(1, Math.floor((tx.amountTransferred || tx.expectedAmount) / 50));
+        this.data.vote_ledger.push({
+          id: `vld-rec-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+          transactionId: tx.id,
+          competitionId: tx.competitionId || 'comp-chc-benin-01',
+          candidateId: tx.candidateId,
+          quantity: qty,
+          createdAt: tx.createdAt || now,
+        });
+      }
+
+      // Update candidates approvedVotes
+      for (let i = 0; i < this.data.candidates.length; i++) {
+        const cand = this.data.candidates[i];
+        const txVotes = candVotesMap.get(cand.id) || candVotesMap.get(cand.slug) || 0;
+        const currentApproved = (cand as any).approvedVotes || 0;
+        const ledgerVotes = this.data.vote_ledger
+          .filter((v) => v.candidateId === cand.id || v.candidateId === cand.slug)
+          .reduce((acc, v) => acc + v.quantity, 0);
+        const finalVotes = Math.max(txVotes, currentApproved, ledgerVotes);
+        (this.data.candidates[i] as any).approvedVotes = finalVotes;
+        this.data.candidates[i].updatedAt = now;
+      }
+
+      this.data.audit_logs.push({
+        id: `log-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+        actorUserId: adminUser.id,
+        actorName: adminUser.name,
+        action: 'VOTES_RECONCILED',
+        entityType: 'SYSTEM',
+        entityId: 'VOTE_LEDGER',
+        metadata: {
+          approvedTransactionsCount: approvedTxs.length,
+          totalLedgerEntries: this.data.vote_ledger.length,
+        },
+        createdAt: now,
+      });
+
+      this.persistSync(this.data);
+      return this.getPublicContest();
     } finally {
       release();
     }
