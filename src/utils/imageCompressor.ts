@@ -1,7 +1,7 @@
 /**
  * Image compression utility to prevent heavy base64 strings from bloating
  * Firestore documents or exhausting mobile device memory.
- * Compresses images to max 800x800 with JPEG quality targeting strictly under 150KB.
+ * Compresses images to max 400x400 with JPEG quality 0.5 targeting strictly under 80KB.
  */
 
 export interface CompressionResult {
@@ -13,9 +13,9 @@ export interface CompressionResult {
 
 export async function compressImageFile(
   file: File,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.55
+  maxWidth = 400,
+  maxHeight = 400,
+  quality = 0.5
 ): Promise<CompressionResult> {
   const originalSizeKb = Math.round(file.size / 1024);
 
@@ -51,7 +51,7 @@ export async function compressImageFile(
         try {
           let { width, height } = img;
 
-          // Downscale while preserving aspect ratio (max 800x800)
+          // Downscale while preserving aspect ratio (max 400x400)
           if (width > maxWidth || height > maxHeight) {
             if (width / height > maxWidth / maxHeight) {
               height = Math.round((height * maxWidth) / width);
@@ -90,25 +90,25 @@ export async function compressImageFile(
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Compress to JPEG with target < 150KB
+          // Compress to JPEG with target strictly < 80KB
           let currentQuality = quality;
           let compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
           let compressedSizeKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
 
-          // Iteratively step down quality if still over 150KB
-          if (compressedSizeKb > 150 && currentQuality > 0.4) {
+          // Iteratively step down quality if still over 80KB
+          if (compressedSizeKb > 80 && currentQuality > 0.4) {
             currentQuality = 0.4;
             compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
             compressedSizeKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
           }
 
-          if (compressedSizeKb > 150 && currentQuality > 0.25) {
+          if (compressedSizeKb > 80 && currentQuality > 0.25) {
             currentQuality = 0.25;
             compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
             compressedSizeKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
           }
 
-          if (compressedSizeKb > 150) {
+          if (compressedSizeKb > 80) {
             // Further scale canvas if still oversized
             const smallCanvas = document.createElement('canvas');
             smallCanvas.width = Math.max(1, Math.round(width * 0.75));
@@ -118,7 +118,7 @@ export async function compressImageFile(
               smallCtx.fillStyle = '#FFFFFF';
               smallCtx.fillRect(0, 0, smallCanvas.width, smallCanvas.height);
               smallCtx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
-              compressedDataUrl = smallCanvas.toDataURL('image/jpeg', 0.4);
+              compressedDataUrl = smallCanvas.toDataURL('image/jpeg', 0.35);
               compressedSizeKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
             }
           }

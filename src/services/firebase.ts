@@ -409,19 +409,54 @@ export async function approvePendingVoteInFirestore(
       if (candSnap.exists()) {
         await updateDoc(candRef, {
           approvedVotes: increment(effectiveVoteCount),
+          votes: increment(effectiveVoteCount),
           updatedAt: now,
         });
       } else {
-        // Create candidate entry with the vote count if not yet existing
-        await setDoc(
-          candRef,
-          {
-            id: effectiveCandidateId,
-            approvedVotes: effectiveVoteCount,
+        // Look up by matching doc ID or name in candidates collection to safely increment
+        const candCol = collection(db, 'candidates');
+        const snap = await getDocs(candCol);
+        let foundRef = null;
+        const normTarget = effectiveCandidateId.trim().toLowerCase();
+        const normNum = normTarget.replace(/^cand-0*/, '');
+
+        for (const d of snap.docs) {
+          const dData = d.data();
+          const dId = d.id.toLowerCase();
+          const dNum = dId.replace(/^cand-0*/, '');
+          const cId = String(dData.id || '').toLowerCase();
+          const cName = String(dData.name || '').toLowerCase();
+
+          if (
+            dId === normTarget ||
+            (normNum && dNum === normNum) ||
+            cId === normTarget ||
+            (normTarget && cName.includes(normTarget))
+          ) {
+            foundRef = doc(db, 'candidates', d.id);
+            break;
+          }
+        }
+
+        if (foundRef) {
+          await updateDoc(foundRef, {
+            approvedVotes: increment(effectiveVoteCount),
+            votes: increment(effectiveVoteCount),
             updatedAt: now,
-          },
-          { merge: true }
-        );
+          });
+        } else {
+          // Create entry with the initial vote count only if contestant doesn't exist
+          await setDoc(
+            candRef,
+            {
+              id: effectiveCandidateId,
+              approvedVotes: effectiveVoteCount,
+              votes: effectiveVoteCount,
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+        }
       }
     }
 
@@ -520,10 +555,10 @@ export function subscribeToCandidatesRealtime(
     return onSnapshot(
       candidatesCol,
       (snapshot) => {
-        const rawList: Candidate[] = [];
+        const list: Candidate[] = [];
         snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as Partial<Candidate>;
-          rawList.push({
+          const data = docSnap.data() as any;
+          list.push({
             id: docSnap.id,
             competitionId: data.competitionId || 'comp-chc-benin-01',
             name: data.name || 'Contestant',
@@ -533,41 +568,18 @@ export function subscribeToCandidatesRealtime(
             image: data.image || '',
             status: (data.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
             sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 99,
-            approvedVotes: typeof data.approvedVotes === 'number' ? data.approvedVotes : 0,
+            approvedVotes:
+              typeof data.approvedVotes === 'number'
+                ? data.approvedVotes
+                : typeof data.votes === 'number'
+                ? data.votes
+                : 0,
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString(),
           });
         });
 
-        // Deduplicate and merge candidates by name/normalized ID to avoid split vote totals
-        const mergedMap = new Map<string, Candidate>();
-        for (const cand of rawList) {
-          const key = cand.name.toLowerCase().trim();
-          const existing = mergedMap.get(key);
-          if (existing) {
-            const highestVotes = Math.max(existing.approvedVotes || 0, cand.approvedVotes || 0);
-            // Stable ID selection (prefer clean cand-XX or existing ID to avoid changing keys)
-            const chosenId =
-              existing.id && !existing.id.startsWith('cand-1787') && !existing.id.startsWith('cand-1788')
-                ? existing.id
-                : cand.id || existing.id;
-
-            mergedMap.set(key, {
-              ...cand,
-              ...existing,
-              id: chosenId,
-              approvedVotes: highestVotes,
-              image: existing.image || cand.image,
-              biography: existing.biography || cand.biography,
-              sortOrder: Math.min(existing.sortOrder || 99, cand.sortOrder || 99),
-            });
-          } else {
-            mergedMap.set(key, cand);
-          }
-        }
-
-        const list = Array.from(mergedMap.values());
-        // Sort by sortOrder ascending, then by name
+        // Load candidates AS-IS directly from Firestore collection
         list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
         onUpdate(list);
       },
@@ -591,11 +603,11 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
     const db = getFirestoreDb();
     const candidatesCol = collection(db, 'candidates');
     const snapshot = await getDocs(candidatesCol);
-    const rawList: Candidate[] = [];
+    const list: Candidate[] = [];
 
     snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as Partial<Candidate>;
-      rawList.push({
+      const data = docSnap.data() as any;
+      list.push({
         id: docSnap.id,
         competitionId: data.competitionId || 'comp-chc-benin-01',
         name: data.name || 'Contestant',
@@ -605,31 +617,17 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
         image: data.image || '',
         status: (data.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 99,
-        approvedVotes: typeof data.approvedVotes === 'number' ? data.approvedVotes : 0,
+        approvedVotes:
+          typeof data.approvedVotes === 'number'
+            ? data.approvedVotes
+            : typeof data.votes === 'number'
+            ? data.votes
+            : 0,
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: data.updatedAt || new Date().toISOString(),
       });
     });
 
-    const mergedMap = new Map<string, Candidate>();
-    for (const cand of rawList) {
-      const key = cand.name.toLowerCase().trim();
-      const existing = mergedMap.get(key);
-      if (existing) {
-        const highestVotes = Math.max(existing.approvedVotes || 0, cand.approvedVotes || 0);
-        mergedMap.set(key, {
-          ...existing,
-          ...cand,
-          approvedVotes: highestVotes,
-          image: cand.image || existing.image,
-          biography: cand.biography || existing.biography,
-        });
-      } else {
-        mergedMap.set(key, cand);
-      }
-    }
-
-    const list = Array.from(mergedMap.values());
     list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
     return list;
   } catch (err) {

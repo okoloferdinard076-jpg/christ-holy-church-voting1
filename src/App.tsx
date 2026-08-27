@@ -140,77 +140,13 @@ export default function App() {
 
       if (data.candidates && data.candidates.length > 0) {
         setCandidates((prev) => {
+          if (prev.length > 0) return prev;
           const stored = getStoredCandidates();
-          const combinedMap = new Map<string, Candidate>();
-
-          // 1. Add server candidates
-          data.candidates.forEach((dc) => {
-            const key = dc.name.toLowerCase().trim();
-            combinedMap.set(key, dc);
-          });
-
-          // 2. Merge stored candidates
-          stored.forEach((sc) => {
-            const key = sc.name.toLowerCase().trim();
-            const existing = combinedMap.get(key);
-            if (existing) {
-              const highestVotes = Math.max(existing.approvedVotes || 0, sc.approvedVotes || 0);
-              combinedMap.set(key, {
-                ...existing,
-                ...sc,
-                id: existing.id || sc.id,
-                approvedVotes: highestVotes,
-                image: sc.image || existing.image,
-              });
-            } else {
-              combinedMap.set(key, sc);
-            }
-          });
-
-          // 3. Merge in-memory prev state
-          prev.forEach((pc) => {
-            const key = pc.name.toLowerCase().trim();
-            const existing = combinedMap.get(key);
-            if (existing) {
-              const highestVotes = Math.max(existing.approvedVotes || 0, pc.approvedVotes || 0);
-              combinedMap.set(key, {
-                ...existing,
-                ...pc,
-                id: existing.id || pc.id,
-                approvedVotes: highestVotes,
-                image: pc.image || existing.image,
-              });
-            }
-          });
-
-          const mergedList = Array.from(combinedMap.values()).sort(
-            (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name)
-          );
-
-          // Deep comparison check to prevent unnecessary re-render / input reset
-          const isIdentical =
-            prev.length === mergedList.length &&
-            prev.every((p, i) => {
-              const m = mergedList[i];
-              return (
-                m &&
-                p.id === m.id &&
-                p.approvedVotes === m.approvedVotes &&
-                p.name === m.name &&
-                p.image === m.image &&
-                p.status === m.status &&
-                p.state === m.state
-              );
-            });
-
-          if (isIdentical) {
-            return prev;
-          }
-
-          setStoredCandidates(mergedList);
-          const calcTotal = mergedList.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
+          if (stored.length > 0) return stored;
+          setStoredCandidates(data.candidates);
+          const calcTotal = data.candidates.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
           setTotalVotes(Math.max(data.totalApprovedVotes || 0, calcTotal));
-          return mergedList;
+          return data.candidates;
         });
       }
       setFetchError(null);
@@ -245,7 +181,7 @@ export default function App() {
     loadData(true);
     refreshPendingCount();
 
-    // 1. Initialize Firestore seed if collection is completely fresh
+    // 1. Initialize Firestore seed ONLY if collection is completely fresh
     seedInitialCandidatesIfEmpty(DEFAULT_CANDIDATES).catch((err) =>
       console.warn('Firebase initial seed check:', err)
     );
@@ -253,56 +189,10 @@ export default function App() {
     // 2. Subscribe to Real-time Firestore updates across all devices
     const unsubscribeCandidates = subscribeToCandidatesRealtime((realtimeCandidates) => {
       if (Array.isArray(realtimeCandidates) && realtimeCandidates.length > 0) {
-        setCandidates((prev) => {
-          const map = new Map<string, Candidate>();
-          realtimeCandidates.forEach((rc) => {
-            const key = rc.name.toLowerCase().trim();
-            map.set(key, rc);
-          });
-
-          // Preserve any in-memory candidate with higher votes
-          prev.forEach((pc) => {
-            const key = pc.name.toLowerCase().trim();
-            const existing = map.get(key);
-            if (existing) {
-              const maxVotes = Math.max(existing.approvedVotes || 0, pc.approvedVotes || 0);
-              map.set(key, {
-                ...existing,
-                ...pc,
-                id: existing.id || pc.id,
-                approvedVotes: maxVotes,
-                image: existing.image || pc.image,
-              });
-            }
-          });
-
-          const merged = Array.from(map.values()).sort(
-            (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name)
-          );
-
-          // Deep comparison check
-          const isSame =
-            prev.length === merged.length &&
-            prev.every((p, i) => {
-              const m = merged[i];
-              return (
-                m &&
-                p.id === m.id &&
-                p.approvedVotes === m.approvedVotes &&
-                p.name === m.name &&
-                p.image === m.image &&
-                p.status === m.status &&
-                p.state === m.state
-              );
-            });
-
-          if (isSame) return prev;
-
-          setStoredCandidates(merged);
-          const total = merged.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
-          setTotalVotes(total);
-          return merged;
-        });
+        setCandidates(realtimeCandidates);
+        setStoredCandidates(realtimeCandidates);
+        const total = realtimeCandidates.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
+        setTotalVotes(total);
       }
     });
 

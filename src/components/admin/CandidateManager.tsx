@@ -239,8 +239,8 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       }
       setMessage(null);
 
-      // Client-side image compression downscaling to max 800x800 high quality JPEG
-      const compressed = await compressImageFile(file, 800, 800, 0.82);
+      // Client-side image compression downscaling to max 400x400 JPEG quality 0.5 (< 80KB safe for Firestore)
+      const compressed = await compressImageFile(file, 400, 400, 0.5);
       setCompressionInfo(compressed);
 
       if (forCandId) {

@@ -538,12 +538,11 @@ export async function approvePayment(token: string, transactionId: string) {
       if (cand) {
         cand.approvedVotes = (cand.approvedVotes || 0) + target.voteQuantity;
         setStoredCandidates(candidates);
-        syncCandidateToFirestore(cand).catch(() => {});
       }
     }
   }
 
-  // 2. Real-time Firestore Cloud approval and candidate vote increment
+  // 2. Real-time Firestore Cloud approval and atomic candidate vote increment
   approvePendingVoteInFirestore(
     transactionId,
     target?.candidateId,
@@ -836,9 +835,9 @@ export async function updateCandidate(
   // 1. Direct synchronous persistence
   setStoredCandidates(currentList);
 
-  // 2. Instant Firestore Cloud synchronization
+  // 2. Instant Firestore Cloud partial synchronization
   try {
-    syncCandidateToFirestore(targetCandidate).catch((err) =>
+    updateCandidateInFirestore(candidateId, updates).catch((err) =>
       console.warn('Firestore update sync error:', err)
     );
   } catch (e) {
