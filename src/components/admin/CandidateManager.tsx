@@ -153,7 +153,12 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
 
   // Direct Manual Vote Override saved straight to Firestore
   const handleOverrideVotes = async (cand: Candidate, overrideValue?: number) => {
-    const rawVal = overrideValue !== undefined ? overrideValue : candidateVoteInputs[cand.id];
+    const rawVal =
+      overrideValue !== undefined
+        ? overrideValue
+        : candidateVoteInputs[cand.id] !== undefined
+        ? candidateVoteInputs[cand.id]
+        : candidateVoteInputs[cand.name.toLowerCase()];
     const newVotes = Math.max(
       0,
       Math.floor(Number(rawVal !== undefined && rawVal !== '' ? rawVal : cand.approvedVotes || 0))
@@ -162,19 +167,19 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setCandidateVoteInputs((prev) => ({
       ...prev,
       [cand.id]: newVotes,
+      [cand.name.toLowerCase()]: newVotes,
     }));
     setSavingVoteCandId(cand.id);
     setMessage(null);
 
     try {
-      const res = await overrideCandidateVotes(token, cand.id, newVotes, cand.name);
+      await overrideCandidateVotes(token, cand.id, newVotes, cand.name);
       setSavedSuccessCandId(cand.id);
       setTimeout(() => setSavedSuccessCandId(null), 3000);
       setMessage({
         type: 'success',
         text: `✓ Total approved votes for "${cand.name}" set to ${newVotes.toLocaleString()} and synced to Firestore!`,
       });
-      onRefresh();
     } catch (err: any) {
       setMessage({
         type: 'error',
@@ -194,7 +199,10 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     try {
       let savedCount = 0;
       for (const cand of candidates) {
-        const rawVal = candidateVoteInputs[cand.id];
+        const rawVal =
+          candidateVoteInputs[cand.id] !== undefined
+            ? candidateVoteInputs[cand.id]
+            : candidateVoteInputs[cand.name.toLowerCase()];
         const val = rawVal !== undefined && rawVal !== '' ? Number(rawVal) : cand.approvedVotes || 0;
         const safeVotes = Math.max(0, Math.floor(val));
         await overrideCandidateVotes(token, cand.id, safeVotes, cand.name);
@@ -204,7 +212,6 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
         type: 'success',
         text: `✓ Successfully saved and synchronized votes for all ${savedCount} contestants to Firestore & Leaderboard.`,
       });
-      onRefresh();
     } catch (err: any) {
       setMessage({
         type: 'error',
@@ -511,6 +518,8 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                       value={
                         candidateVoteInputs[cand.id] !== undefined
                           ? candidateVoteInputs[cand.id]
+                          : candidateVoteInputs[cand.name.toLowerCase()] !== undefined
+                          ? candidateVoteInputs[cand.name.toLowerCase()]
                           : cand.approvedVotes || 0
                       }
                       onChange={(e) => {
@@ -518,6 +527,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                         setCandidateVoteInputs((prev) => ({
                           ...prev,
                           [cand.id]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
+                          [cand.name.toLowerCase()]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
                         }));
                       }}
                       className="w-full px-2.5 py-1.5 rounded-lg bg-blue-950 border border-amber-400/50 text-white font-black text-xs text-right focus:outline-hidden focus:ring-2 focus:ring-amber-400"
@@ -667,6 +677,8 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                           value={
                             candidateVoteInputs[cand.id] !== undefined
                               ? candidateVoteInputs[cand.id]
+                              : candidateVoteInputs[cand.name.toLowerCase()] !== undefined
+                              ? candidateVoteInputs[cand.name.toLowerCase()]
                               : cand.approvedVotes || 0
                           }
                           onChange={(e) => {
@@ -674,6 +686,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                             setCandidateVoteInputs((prev) => ({
                               ...prev,
                               [cand.id]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
+                              [cand.name.toLowerCase()]: val === '' ? '' : Math.max(0, parseInt(val, 10) || 0),
                             }));
                           }}
                           className="w-full pl-16 pr-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-black text-blue-950 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-2xs"

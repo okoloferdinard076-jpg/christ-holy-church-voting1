@@ -546,12 +546,20 @@ export function subscribeToCandidatesRealtime(
           const existing = mergedMap.get(key);
           if (existing) {
             const highestVotes = Math.max(existing.approvedVotes || 0, cand.approvedVotes || 0);
+            // Stable ID selection (prefer clean cand-XX or existing ID to avoid changing keys)
+            const chosenId =
+              existing.id && !existing.id.startsWith('cand-1787') && !existing.id.startsWith('cand-1788')
+                ? existing.id
+                : cand.id || existing.id;
+
             mergedMap.set(key, {
-              ...existing,
               ...cand,
+              ...existing,
+              id: chosenId,
               approvedVotes: highestVotes,
-              image: cand.image || existing.image,
-              biography: cand.biography || existing.biography,
+              image: existing.image || cand.image,
+              biography: existing.biography || cand.biography,
+              sortOrder: Math.min(existing.sortOrder || 99, cand.sortOrder || 99),
             });
           } else {
             mergedMap.set(key, cand);

@@ -1166,12 +1166,20 @@ class DatabaseService {
     const release = await dbMutex.acquire();
     try {
       const targetId = String(candidateId).trim().toLowerCase();
-      let idx = this.data.candidates.findIndex(
-        (c) =>
-          String(c.id).toLowerCase() === targetId ||
-          String(c.id).replace(/^cand-0*/, '') === targetId.replace(/^cand-0*/, '') ||
-          c.slug === targetId
-      );
+      const targetCleanNum = targetId.replace(/^cand-0*/, '');
+      const candidateName = updates.name ? updates.name.trim().toLowerCase() : '';
+
+      let idx = this.data.candidates.findIndex((c) => {
+        const cId = String(c.id).toLowerCase();
+        const cNum = cId.replace(/^cand-0*/, '');
+        const cName = String(c.name || '').trim().toLowerCase();
+        return (
+          cId === targetId ||
+          (targetCleanNum && cNum === targetCleanNum) ||
+          c.slug === targetId ||
+          (candidateName && cName === candidateName)
+        );
+      });
 
       const now = new Date().toISOString();
 
