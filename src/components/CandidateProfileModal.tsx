@@ -1,23 +1,31 @@
 import React, { useState } from 'react';
 import { Candidate } from '../types';
-import { X, Vote, MapPin, CheckCircle2, User, MessageCircle, Twitter, Share2, Copy, Check } from 'lucide-react';
+import { X, Vote, MapPin, CheckCircle2, User, MessageCircle, Twitter, Share2, Copy, Check, TrendingUp, Trophy } from 'lucide-react';
 
 interface CandidateProfileModalProps {
   candidate: Candidate | null;
   onClose: () => void;
   onVote: (candidate: Candidate) => void;
   rank?: number;
+  leaderVotes?: number;
 }
+
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
 export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
   candidate,
   onClose,
   onVote,
   rank,
+  leaderVotes = 0,
 }) => {
   const [copied, setCopied] = useState(false);
   if (!candidate) return null;
   const votes = candidate.approvedVotes || 0;
+  const candidatePhoto = candidate.photoUrl || candidate.image || DEFAULT_AVATAR;
+
+  const isLeader = leaderVotes > 0 && votes >= leaderVotes;
+  const percentage = leaderVotes > 0 ? Math.min(100, Math.round((votes / leaderVotes) * 100)) : 0;
 
   const getInitials = (name: string) => {
     return name
@@ -111,25 +119,15 @@ export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
         </button>
 
         {/* Hero Portrait Container */}
-        <div className="relative aspect-16/10 bg-slate-900 overflow-hidden flex items-center justify-center">
-          {candidate.image && candidate.image.trim() ? (
-            <img
-              src={candidate.image}
-              alt={candidate.name}
-              className="w-full h-full object-cover object-top"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-slate-900 via-blue-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center select-none">
-              <div className="w-24 h-24 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-white mb-2 shadow-lg">
-                <span className="text-3xl font-black text-amber-400">
-                  {getInitials(candidate.name) || <User className="w-10 h-10 text-white/70" />}
-                </span>
-              </div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Youth Member & Chorister
-              </span>
-            </div>
-          )}
+        <div className="relative aspect-16/10 bg-slate-900 overflow-hidden flex items-center justify-center select-none">
+          <img
+            src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+            }}
+            alt={candidate.name}
+            className="w-full h-full object-cover object-top"
+          />
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
           <div className="absolute bottom-4 left-5 right-5 text-white pointer-events-none">
@@ -163,6 +161,55 @@ export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
             </div>
             <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
               <CheckCircle2 className="w-6 h-6" />
+            </div>
+          </div>
+
+          {/* Visual Progress Bar Relative to Leader */}
+          <div className="space-y-1.5 px-0.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                {isLeader ? (
+                  <>
+                    <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="font-bold text-amber-600 dark:text-amber-400">Current Leader</span>
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-4 h-4 text-blue-900 dark:text-amber-400 shrink-0" />
+                    <span>Progress vs Leader</span>
+                  </>
+                )}
+              </span>
+              <span
+                className={`font-black tracking-tight ${
+                  isLeader
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-blue-950 dark:text-slate-200'
+                }`}
+              >
+                {leaderVotes > 0 ? `${percentage}%` : '0%'}
+              </span>
+            </div>
+
+            {/* Progress track */}
+            <div
+              className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200/60 dark:border-slate-700/60"
+              role="progressbar"
+              aria-valuenow={percentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${candidate.name}'s progress relative to the contest leader`}
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-out ${
+                  isLeader
+                    ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300'
+                    : 'bg-gradient-to-r from-blue-900 via-blue-800 to-amber-500 dark:from-blue-600 dark:via-blue-500 dark:to-amber-400'
+                }`}
+                style={{
+                  width: `${leaderVotes > 0 && votes > 0 ? Math.max(percentage, 4) : 0}%`,
+                }}
+              />
             </div>
           </div>
 

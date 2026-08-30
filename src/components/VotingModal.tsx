@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+
 interface VotingModalProps {
   isOpen?: boolean;
   onClose: () => void;
@@ -590,17 +592,14 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                           : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      {cand.image && cand.image.trim() ? (
-                        <img
-                          src={cand.image}
-                          alt={cand.name}
-                          className="w-12 h-12 rounded-lg object-cover object-top border border-slate-200 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-blue-900/10 border border-blue-950/15 flex items-center justify-center text-blue-950 font-bold text-xs shrink-0">
-                          {getInitials(cand.name)}
-                        </div>
-                      )}
+                      <img
+                        src={cand.photoUrl || cand.image || DEFAULT_AVATAR}
+                        alt={cand.name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                        }}
+                        className="w-12 h-12 rounded-lg object-cover object-top border border-slate-200 shrink-0"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-blue-950 truncate">{cand.name}</div>
                         <div className="text-xs text-red-600 font-medium">{cand.state}</div>
@@ -632,17 +631,14 @@ export const VotingModal: React.FC<VotingModalProps> = ({
               {/* Selected Candidate Summary Banner */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {selectedCandidate.image && selectedCandidate.image.trim() ? (
-                    <img
-                      src={selectedCandidate.image}
-                      alt={selectedCandidate.name}
-                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-lg bg-blue-900/10 border border-blue-950/15 flex items-center justify-center text-blue-950 font-bold text-xs shrink-0">
-                      {getInitials(selectedCandidate.name)}
-                    </div>
-                  )}
+                  <img
+                    src={selectedCandidate.photoUrl || selectedCandidate.image || DEFAULT_AVATAR}
+                    alt={selectedCandidate.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                    }}
+                    className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                  />
                   <div>
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       Supporting Candidate

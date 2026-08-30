@@ -2,6 +2,8 @@ import React from 'react';
 import { Candidate } from '../types';
 import { Trophy, Medal, Crown, Vote, User, ShieldCheck } from 'lucide-react';
 
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+
 interface LeaderboardProps {
   candidates: Candidate[];
   onVoteCandidate: (candidate: Candidate) => void;
@@ -110,17 +112,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3.5 my-2">
-                    {candidate.image && candidate.image.trim() ? (
-                      <img
-                        src={candidate.image}
-                        alt={candidate.name}
-                        className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-full bg-blue-900/10 dark:bg-slate-800 border-2 border-blue-950/20 dark:border-slate-700 flex items-center justify-center text-blue-950 dark:text-blue-300 font-black text-sm shadow-inner shrink-0">
-                        {getInitials(candidate.name) || <User className="w-6 h-6" />}
-                      </div>
-                    )}
+                    <img
+                      src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+                      alt={candidate.name}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                      }}
+                      className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                    />
                     <div>
                       <h3 className="font-extrabold text-base text-blue-950 dark:text-white leading-tight">
                         {candidate.name}
@@ -189,17 +188,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5 sm:gap-3">
-                          {candidate.image && candidate.image.trim() ? (
-                            <img
-                              src={candidate.image}
-                              alt={candidate.name}
-                              className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-900/10 dark:bg-slate-800 border border-blue-950/15 dark:border-slate-700 flex items-center justify-center text-blue-950 dark:text-blue-300 font-bold text-xs shrink-0">
-                              {getInitials(candidate.name)}
-                            </div>
-                          )}
+                          <img
+                            src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+                            alt={candidate.name}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                            }}
+                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                          />
                           <div className="min-w-0">
                             <button
                               onClick={() => onViewCandidate(candidate)}

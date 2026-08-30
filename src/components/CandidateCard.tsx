@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Candidate } from '../types';
-import { Vote, MapPin, CheckCircle2, Info, User, MessageCircle, Twitter, Share2, Copy, Check } from 'lucide-react';
+import { Vote, MapPin, CheckCircle2, Info, User, MessageCircle, Twitter, Share2, Copy, Check, TrendingUp, Trophy } from 'lucide-react';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -8,16 +8,25 @@ interface CandidateCardProps {
   onViewProfile: (candidate: Candidate) => void;
   votePrice?: number;
   rank?: number;
+  leaderVotes?: number;
 }
+
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
 export const CandidateCard: React.FC<CandidateCardProps> = ({
   candidate,
   onVote,
   onViewProfile,
   rank,
+  leaderVotes = 0,
 }) => {
   const [copied, setCopied] = useState(false);
   const votes = candidate.approvedVotes || 0;
+  const candidatePhoto = candidate.photoUrl || candidate.image || DEFAULT_AVATAR;
+
+  // Percentage relative to competition leader
+  const isLeader = leaderVotes > 0 && votes >= leaderVotes;
+  const percentage = leaderVotes > 0 ? Math.min(100, Math.round((votes / leaderVotes) * 100)) : 0;
 
   // Extract initials for blank candidate avatar
   const getInitials = (name: string) => {
@@ -126,31 +135,20 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
 
       {/* Candidate Portrait Container */}
       <div
-        className="relative aspect-4/3 sm:aspect-square bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50/40 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 border-b border-slate-100 dark:border-slate-800 overflow-hidden cursor-pointer flex items-center justify-center"
+        className="relative aspect-4/3 sm:aspect-square bg-slate-900 border-b border-slate-100 dark:border-slate-800 overflow-hidden cursor-pointer flex items-center justify-center select-none"
         onClick={() => onViewProfile(candidate)}
       >
-        {candidate.image && candidate.image.trim() ? (
-          <img
-            src={candidate.image}
-            alt={candidate.name}
-            className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
-        ) : (
-          /* Blank Portrait Placeholder with Initials */
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center select-none bg-slate-50/80 dark:bg-slate-900/60">
-            <div className="w-20 h-20 rounded-full bg-blue-900/10 dark:bg-slate-800 border-2 border-blue-950/15 dark:border-slate-700 flex items-center justify-center text-blue-950 dark:text-blue-300 shadow-inner mb-2 group-hover:scale-105 transition-transform">
-              <span className="text-2xl font-black tracking-wider text-blue-950 dark:text-blue-300">
-                {getInitials(candidate.name) || <User className="w-8 h-8 text-blue-900/60 dark:text-blue-300" />}
-              </span>
-            </div>
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              Youth & Chorister
-            </span>
-          </div>
-        )}
+        <img
+          src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+          }}
+          alt={candidate.name}
+          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+          loading="lazy"
+        />
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90 pointer-events-none" />
 
         {/* Name overlay at base */}
         <div className="absolute bottom-3 left-3 right-3 text-white pointer-events-none">
@@ -176,6 +174,55 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
           </div>
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+        </div>
+
+        {/* Visual Progress Bar Relative to Leader */}
+        <div className="space-y-1.5 px-0.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+              {isLeader ? (
+                <>
+                  <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="font-bold text-amber-600 dark:text-amber-400">Current Leader</span>
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-900 dark:text-amber-400 shrink-0" />
+                  <span>Progress vs Leader</span>
+                </>
+              )}
+            </span>
+            <span
+              className={`font-black tracking-tight ${
+                isLeader
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-blue-950 dark:text-slate-200'
+              }`}
+            >
+              {leaderVotes > 0 ? `${percentage}%` : '0%'}
+            </span>
+          </div>
+
+          {/* Progress track */}
+          <div
+            className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200/60 dark:border-slate-700/60"
+            role="progressbar"
+            aria-valuenow={percentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${candidate.name}'s progress relative to the contest leader`}
+          >
+            <div
+              className={`h-full rounded-full transition-all duration-700 ease-out ${
+                isLeader
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300'
+                  : 'bg-gradient-to-r from-blue-900 via-blue-800 to-amber-500 dark:from-blue-600 dark:via-blue-500 dark:to-amber-400'
+              }`}
+              style={{
+                width: `${leaderVotes > 0 && votes > 0 ? Math.max(percentage, 4) : 0}%`,
+              }}
+            />
           </div>
         </div>
 

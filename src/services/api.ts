@@ -742,9 +742,17 @@ export async function uploadCandidatePhoto(
 
 export async function createCandidate(
   token: string,
-  candidateData: { name: string; state: string; biography: string; image?: string; sortOrder?: number }
+  candidateData: {
+    name: string;
+    state: string;
+    biography: string;
+    image?: string;
+    photoUrl?: string;
+    sortOrder?: number;
+  }
 ): Promise<{ success: boolean; candidate: Candidate }> {
   const now = new Date().toISOString();
+  const photo = candidateData.photoUrl?.trim() || candidateData.image?.trim() || '';
   const newCandidate: Candidate = {
     id: `cand-${Date.now()}`,
     competitionId: 'comp-chc-benin-01',
@@ -755,7 +763,8 @@ export async function createCandidate(
       .replace(/(^-|-$)+/g, ''),
     state: candidateData.state.trim(),
     biography: candidateData.biography.trim(),
-    image: candidateData.image?.trim() || '',
+    image: photo,
+    photoUrl: photo,
     status: 'ACTIVE',
     sortOrder: typeof candidateData.sortOrder === 'number' ? candidateData.sortOrder : 99,
     createdAt: now,

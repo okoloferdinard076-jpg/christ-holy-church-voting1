@@ -558,6 +558,7 @@ export function subscribeToCandidatesRealtime(
         const list: Candidate[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as any;
+          const photo = data.photoUrl || data.image || '';
           list.push({
             id: docSnap.id,
             competitionId: data.competitionId || 'comp-chc-benin-01',
@@ -565,7 +566,8 @@ export function subscribeToCandidatesRealtime(
             slug: data.slug || docSnap.id,
             state: data.state || 'Edo Contestant',
             biography: data.biography || '',
-            image: data.image || '',
+            image: photo,
+            photoUrl: photo,
             status: (data.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
             sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 99,
             approvedVotes:
@@ -607,6 +609,7 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
 
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as any;
+      const photo = data.photoUrl || data.image || '';
       list.push({
         id: docSnap.id,
         competitionId: data.competitionId || 'comp-chc-benin-01',
@@ -614,7 +617,8 @@ export async function fetchAllCandidatesFromFirestore(): Promise<Candidate[]> {
         slug: data.slug || docSnap.id,
         state: data.state || 'Edo Contestant',
         biography: data.biography || '',
-        image: data.image || '',
+        image: photo,
+        photoUrl: photo,
         status: (data.status as 'ACTIVE' | 'INACTIVE') || 'ACTIVE',
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 99,
         approvedVotes:
@@ -855,6 +859,7 @@ export async function syncCandidateToFirestore(candidate: Candidate): Promise<vo
 
 /**
  * Updates partial fields of a candidate in Firestore.
+ * Uses merge: true so existing fields (like votes or untouched photos) are NEVER wiped.
  */
 export async function updateCandidateInFirestore(
   candidateId: string,
@@ -864,7 +869,23 @@ export async function updateCandidateInFirestore(
   const candDocRef = doc(db, 'candidates', candidateId);
   const now = new Date().toISOString();
 
-  await setDoc(candDocRef, { ...updates, updatedAt: now }, { merge: true });
+  const sanitizedUpdates: Record<string, any> = { ...updates, updatedAt: now };
+
+  // Synchronize image and photoUrl
+  if (sanitizedUpdates.image && !sanitizedUpdates.photoUrl) {
+    sanitizedUpdates.photoUrl = sanitizedUpdates.image;
+  } else if (sanitizedUpdates.photoUrl && !sanitizedUpdates.image) {
+    sanitizedUpdates.image = sanitizedUpdates.photoUrl;
+  }
+
+  // Remove undefined keys to prevent Firestore write errors
+  Object.keys(sanitizedUpdates).forEach((key) => {
+    if (sanitizedUpdates[key] === undefined) {
+      delete sanitizedUpdates[key];
+    }
+  });
+
+  await setDoc(candDocRef, sanitizedUpdates, { merge: true });
 }
 
 /**

@@ -41,6 +41,8 @@ interface CandidateManagerProps {
   onRefresh: () => void;
 }
 
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+
 export const CandidateManager: React.FC<CandidateManagerProps> = ({
   token,
   candidates,
@@ -118,11 +120,12 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setName(c.name);
     setState(c.state);
     setBiography(c.biography);
-    setImage(c.image || '');
+    const existingPhoto = c.photoUrl || c.image || '';
+    setImage(existingPhoto);
     setSortOrder(c.sortOrder || 1);
     setStatus(c.status);
     setApprovedVotesInput(c.approvedVotes || 0);
-    setPhotoMode(c.image?.startsWith('http') && !c.image.includes('/api/uploads') ? 'url' : 'upload');
+    setPhotoMode(existingPhoto.startsWith('http') && !existingPhoto.includes('/api/uploads') ? 'url' : 'upload');
     setCompressionInfo(null);
     setIsAddOpen(false);
     setMessage(null);
@@ -239,13 +242,16 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
       }
       setMessage(null);
 
-      // Client-side image compression downscaling to max 400x400 JPEG quality 0.5 (< 80KB safe for Firestore)
-      const compressed = await compressImageFile(file, 400, 400, 0.5);
+      // Client-side aggressive image compression downscaling to max 250x250 JPEG quality 0.5 (< 50KB safe for Firestore)
+      const compressed = await compressImageFile(file, 250, 250, 0.5);
       setCompressionInfo(compressed);
 
       if (forCandId) {
         // Direct quick update on existing candidate with compressed image
-        await updateCandidate(token, forCandId, { image: compressed.dataUrl });
+        await updateCandidate(token, forCandId, {
+          image: compressed.dataUrl,
+          photoUrl: compressed.dataUrl,
+        });
         setMessage({
           type: 'success',
           text: `Photo optimized (${compressed.compressedSizeKb} KB, -${compressed.reductionPercentage}%) and synced to Firestore!`,
@@ -282,28 +288,39 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     const candName = name.trim();
     const candState = state.trim();
     const candBio = biography.trim();
-    const candImg = image.trim();
     const candSort = Number(sortOrder) || 1;
 
     try {
       if (editingCandidate) {
-        await updateCandidate(token, editingCandidate.id, {
+        // Safe Partial Update: If no new photo is chosen, keep existing photoUrl completely intact
+        const existingPhoto = editingCandidate.photoUrl || editingCandidate.image || '';
+        const finalPhoto = image.trim() ? image.trim() : existingPhoto;
+
+        const updatePayload: Partial<Candidate> = {
           name: candName,
           state: candState,
           biography: candBio,
-          image: candImg,
+          image: finalPhoto,
+          photoUrl: finalPhoto,
           sortOrder: candSort,
           status,
-          approvedVotes: Number(approvedVotesInput) || 0,
-        });
+        };
+
+        if (approvedVotesInput !== undefined && approvedVotesInput !== null) {
+          updatePayload.approvedVotes = Number(approvedVotesInput) || 0;
+        }
+
+        await updateCandidate(token, editingCandidate.id, updatePayload);
         setMessage({ type: 'success', text: `Contestant "${candName}" updated successfully.` });
         setEditingCandidate(null);
       } else {
+        const finalPhoto = image.trim();
         await createCandidate(token, {
           name: candName,
           state: candState,
           biography: candBio,
-          image: candImg,
+          image: finalPhoto,
+          photoUrl: finalPhoto,
           sortOrder: candSort,
         });
         setMessage({ type: 'success', text: `Contestant "${candName}" added successfully.` });
@@ -589,22 +606,14 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
               <div className="flex items-start gap-4">
                 {/* Photo Area */}
                 <div className="relative group shrink-0">
-                  {cand.image && cand.image.trim() ? (
-                    <img
-                      src={cand.image}
-                      alt={cand.name}
-                      className="w-20 h-20 rounded-2xl object-cover border border-slate-200 shadow-xs"
-                      onError={(e) => {
-                        // Fallback on broken image link
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-blue-900/15 to-blue-950/20 border border-blue-950/15 flex flex-col items-center justify-center text-blue-950 font-black shadow-xs">
-                      <span className="text-lg">{getInitials(cand.name)}</span>
-                      <span className="text-[9px] font-bold text-slate-400 mt-0.5">No photo</span>
-                    </div>
-                  )}
+                  <img
+                    src={cand.photoUrl || cand.image || DEFAULT_AVATAR}
+                    alt={cand.name}
+                    className="w-20 h-20 rounded-2xl object-cover border border-slate-200 shadow-xs"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                    }}
+                  />
 
                   {/* Quick Photo Upload Hover Button */}
                   <button
@@ -986,7 +995,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                           alt="Preview"
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
+                            (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
                           }}
                         />
                         <button

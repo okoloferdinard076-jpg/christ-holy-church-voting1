@@ -352,15 +352,25 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {filteredCandidates.map((candidate) => (
-                  <CandidateCard
-                    key={candidate.id}
-                    candidate={candidate}
-                    onVote={handleStartVoting}
-                    onViewProfile={(c) => setProfileCandidate(c)}
-                    votePrice={paymentSettings.votePrice}
-                  />
-                ))}
+                {(() => {
+                  const leaderVotes = Math.max(...candidates.map((c) => c.approvedVotes || 0), 0);
+                  const rankedList = [...candidates].sort((a, b) => (b.approvedVotes || 0) - (a.approvedVotes || 0));
+                  return filteredCandidates.map((candidate) => {
+                    const rankIdx = rankedList.findIndex((c) => c.id === candidate.id);
+                    const rank = rankIdx !== -1 ? rankIdx + 1 : undefined;
+                    return (
+                      <CandidateCard
+                        key={candidate.id}
+                        candidate={candidate}
+                        rank={rank}
+                        leaderVotes={leaderVotes}
+                        onVote={handleStartVoting}
+                        onViewProfile={(c) => setProfileCandidate(c)}
+                        votePrice={paymentSettings.votePrice}
+                      />
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -427,13 +437,22 @@ export default function App() {
       )}
 
       {/* Candidate Profile Modal */}
-      {profileCandidate && (
-        <CandidateProfileModal
-          candidate={profileCandidate}
-          onClose={() => setProfileCandidate(null)}
-          onVote={(c) => handleStartVoting(c)}
-        />
-      )}
+      {profileCandidate && (() => {
+        const leaderVotes = Math.max(...candidates.map((c) => c.approvedVotes || 0), 0);
+        const rankedList = [...candidates].sort((a, b) => (b.approvedVotes || 0) - (a.approvedVotes || 0));
+        const rankIdx = rankedList.findIndex((c) => c.id === profileCandidate.id);
+        const rank = rankIdx !== -1 ? rankIdx + 1 : undefined;
+
+        return (
+          <CandidateProfileModal
+            candidate={profileCandidate}
+            rank={rank}
+            leaderVotes={leaderVotes}
+            onClose={() => setProfileCandidate(null)}
+            onVote={(c) => handleStartVoting(c)}
+          />
+        );
+      })()}
 
       {/* Administrator Portal */}
       {isAdminOpen && (

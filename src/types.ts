@@ -37,9 +37,11 @@ export interface Candidate {
   state: string;
   biography: string;
   image: string;
+  photoUrl?: string;
   status: 'ACTIVE' | 'INACTIVE';
   sortOrder: number;
   approvedVotes?: number;
+  votes?: number;
   createdAt: string;
   updatedAt: string;
 }
