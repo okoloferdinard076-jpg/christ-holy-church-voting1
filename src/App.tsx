@@ -35,7 +35,8 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     state: 'Edo Contestant',
     biography:
       'Dedicated youth member and passionate choir chorister at Christ Holy Church International No. 2 Benin. Committed to music ministry, spiritual growth, and ambassadorial excellence representing Edo Contestant.',
-    image: '/api/uploads/receipt-1787690881845-b19e8db471898d05.jpg',
+    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80',
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80',
     status: 'ACTIVE',
     sortOrder: 1,
     createdAt: '2026-08-25T20:40:00.000Z',
@@ -50,7 +51,8 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     state: 'Yoruba Contestant',
     biography:
       'Dynamic youth member and dedicated choir chorister at Christ Holy Church International No. 2 Benin. Passionate about music evangelism, youth development, and ambassadorial service representing Yoruba Contestant.',
-    image: '/api/uploads/receipt-1787690899699-d786499acc5167e0.jpg',
+    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80',
+    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80',
     status: 'ACTIVE',
     sortOrder: 2,
     createdAt: '2026-08-25T20:40:00.000Z',
@@ -65,7 +67,8 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     state: 'Igbo Contestant',
     biography:
       'Dynamic youth member and ambassadorial contestant representing Igbo Contestant at Christ Holy Church International No. 2 Benin.',
-    image: '/api/uploads/receipt-1787690927145-aa3ceb304da43f7f.jpg',
+    image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80',
+    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80',
     status: 'ACTIVE',
     sortOrder: 3,
     createdAt: '2026-08-25T20:49:38.676Z',

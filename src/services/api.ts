@@ -12,6 +12,7 @@ import {
   rejectPendingVoteInFirestore,
   deletePendingVoteFromFirestore,
   fetchAllPendingVotesFromFirestore,
+  fetchAllCandidatesFromFirestore,
   setCandidateVotesInFirestore,
   reconcileAndRestoreVotesInFirestore,
 } from './firebase';
@@ -298,14 +299,97 @@ export async function adminLogin(email?: string, password?: string) {
 }
 
 export async function fetchAdminDashboard(token: string): Promise<AdminDashboardStats> {
-  const res = await fetch(`${API_BASE}/admin/dashboard`, {
-    headers: getAdminHeaders(token),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to load dashboard data');
+  let serverStats: AdminDashboardStats | null = null;
+  try {
+    const res = await fetch(`${API_BASE}/admin/dashboard`, {
+      headers: getAdminHeaders(token),
+    });
+    if (res.ok) {
+      serverStats = await res.json();
+    }
+  } catch (err) {
+    console.warn('Server dashboard fetch warning (merging with Firestore):', err);
   }
-  return res.json();
+
+  // Aggregate with live Firestore records
+  try {
+    const [candidates, pendingVotes, transactions] = await Promise.all([
+      fetchAllCandidatesFromFirestore().catch(() => getStoredCandidates()),
+      fetchAllPendingVotesFromFirestore().catch(() => []),
+      fetchTransactionsFromFirestore().catch(() => []),
+    ]);
+
+    const activeCandidates = candidates.length > 0 ? candidates : getStoredCandidates();
+    const allTxs = [...transactions];
+    pendingVotes.forEach((pv) => {
+      if (!allTxs.some((t) => (t.id && t.id === pv.transactionId) || (t.paymentReference && t.paymentReference === pv.transactionId))) {
+        allTxs.push({
+          id: pv.transactionId,
+          paymentReference: pv.transactionId,
+          competitionId: 'comp-chc-benin-01',
+          candidateId: pv.candidateId,
+          candidateName: pv.candidateName,
+          voterName: pv.voterName,
+          voterEmail: pv.email || '',
+          voterPhone: pv.phoneNumber || '',
+          voteQuantity: pv.voteCount,
+          expectedAmount: pv.amountTransferred,
+          amountTransferred: pv.amountTransferred,
+          status: (pv.status.toUpperCase() as any) || 'PENDING',
+          createdAt: pv.createdAt || new Date().toISOString(),
+          updatedAt: pv.updatedAt || new Date().toISOString(),
+        });
+      }
+    });
+
+    const approvedTxs = allTxs.filter((t) => t.status === 'APPROVED');
+    const pendingTxs = allTxs.filter((t) => t.status === 'PENDING');
+    const rejectedTxs = allTxs.filter((t) => t.status === 'REJECTED');
+
+    // True total approved votes: sum of candidate.approvedVotes
+    const totalCandVotes = activeCandidates.reduce((acc, c) => acc + (c.approvedVotes || 0), 0);
+    const txApprovedVotes = approvedTxs.reduce((acc, t) => acc + (t.voteQuantity || 0), 0);
+    const finalApprovedVotes = Math.max(totalCandVotes, txApprovedVotes, serverStats?.totalApprovedVotes || 0);
+
+    const approvedRevenue = approvedTxs.reduce((acc, t) => acc + (t.amountTransferred || t.expectedAmount || (t.voteQuantity * 50) || 0), 0);
+    const finalRevenue = Math.max(approvedRevenue, finalApprovedVotes * 50, serverStats?.totalApprovedRevenue || 0);
+
+    const breakdown = activeCandidates.map((cand) => {
+      const candApprovedTxs = approvedTxs.filter((t) => matchCandidateId(t.candidateId, cand.id) || t.candidateName === cand.name);
+      const candPendingTxs = pendingTxs.filter((t) => matchCandidateId(t.candidateId, cand.id) || t.candidateName === cand.name);
+      
+      const candApprovedVotes = Math.max(
+        cand.approvedVotes || 0,
+        candApprovedTxs.reduce((acc, t) => acc + (t.voteQuantity || 0), 0)
+      );
+      const candPendingVotes = candPendingTxs.reduce((acc, t) => acc + (t.voteQuantity || 0), 0);
+
+      return {
+        candidateId: cand.id,
+        candidateName: cand.name,
+        state: cand.state,
+        approvedVotes: candApprovedVotes,
+        approvedRevenue: candApprovedVotes * 50,
+        pendingVotes: candPendingVotes,
+        pendingRevenue: candPendingVotes * 50,
+      };
+    });
+
+    return {
+      totalApprovedRevenue: finalRevenue,
+      totalApprovedVotes: finalApprovedVotes,
+      pendingPaymentsCount: Math.max(pendingTxs.length, serverStats?.pendingPaymentsCount || 0),
+      approvedPaymentsCount: Math.max(approvedTxs.length, serverStats?.approvedPaymentsCount || 0),
+      rejectedPaymentsCount: Math.max(rejectedTxs.length, serverStats?.rejectedPaymentsCount || 0),
+      totalTransactionsCount: Math.max(allTxs.length, serverStats?.totalTransactionsCount || 0),
+      candidatesCount: activeCandidates.length,
+      competitionStatus: 'ACTIVE',
+      candidateBreakdown: breakdown,
+    };
+  } catch (err) {
+    if (serverStats) return serverStats;
+    throw new Error('Failed to compute dashboard metrics');
+  }
 }
 
 export const fetchAdminStats = fetchAdminDashboard;
@@ -808,13 +892,24 @@ export async function updateCandidate(
   const now = new Date().toISOString();
   const currentList = getStoredCandidates();
 
+  const cleanUpdates = { ...updates };
+  // Preserve existing photos if empty string or undefined
+  if (!cleanUpdates.image && !cleanUpdates.photoUrl) {
+    delete cleanUpdates.image;
+    delete cleanUpdates.photoUrl;
+  }
+  // Preserve existing votes if undefined
+  if (cleanUpdates.approvedVotes === undefined) {
+    delete cleanUpdates.approvedVotes;
+  }
+
   let targetCandidate: Candidate | null = null;
   let candidateIndex = currentList.findIndex((c) => matchCandidateId(c.id, candidateId) || c.slug === candidateId);
 
   if (candidateIndex !== -1) {
     targetCandidate = {
       ...currentList[candidateIndex],
-      ...updates,
+      ...cleanUpdates,
       updatedAt: now,
     };
     currentList[candidateIndex] = targetCandidate;
@@ -830,13 +925,14 @@ export async function updateCandidate(
         .replace(/(^-|-$)+/g, ''),
       state: updates.state ? updates.state.trim() : 'Edo Contestant',
       biography: updates.biography ? updates.biography.trim() : '',
-      image: updates.image?.trim() || '',
+      image: updates.image?.trim() || updates.photoUrl?.trim() || '',
+      photoUrl: updates.photoUrl?.trim() || updates.image?.trim() || '',
       status: updates.status || 'ACTIVE',
       sortOrder: typeof updates.sortOrder === 'number' ? updates.sortOrder : 1,
       createdAt: now,
       updatedAt: now,
-      approvedVotes: updates.approvedVotes || 0,
-      ...updates,
+      approvedVotes: typeof updates.approvedVotes === 'number' ? updates.approvedVotes : 0,
+      ...cleanUpdates,
     };
     currentList.push(targetCandidate);
   }
@@ -846,7 +942,7 @@ export async function updateCandidate(
 
   // 2. Instant Firestore Cloud partial synchronization
   try {
-    updateCandidateInFirestore(candidateId, updates).catch((err) =>
+    updateCandidateInFirestore(candidateId, cleanUpdates).catch((err) =>
       console.warn('Firestore update sync error:', err)
     );
   } catch (e) {
@@ -858,7 +954,7 @@ export async function updateCandidate(
     fetch(`${API_BASE}/admin/candidates/${encodeURIComponent(candidateId)}`, {
       method: 'PUT',
       headers: getAdminHeaders(token),
-      body: JSON.stringify(updates),
+      body: JSON.stringify(cleanUpdates),
     }).catch((err) => console.warn('Background server candidate update sync:', err));
   } catch (e) {
     // Non-blocking
@@ -939,7 +1035,16 @@ export async function reconcileVotesWithCloudAndServer(
     if (res.ok) {
       const serverData = await res.json();
       if (serverData.candidates && Array.isArray(serverData.candidates)) {
-        setStoredCandidates(serverData.candidates);
+        const current = getStoredCandidates();
+        const merged = serverData.candidates.map((sc: Candidate) => {
+          const existing = current.find((c) => matchCandidateId(c.id, sc.id));
+          return {
+            ...sc,
+            approvedVotes: Math.max(sc.approvedVotes || 0, existing?.approvedVotes || 0),
+            photoUrl: sc.photoUrl || sc.image || existing?.photoUrl || existing?.image,
+          };
+        });
+        setStoredCandidates(merged);
       }
     }
   } catch (e) {
