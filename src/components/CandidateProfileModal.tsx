@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Candidate } from '../types';
+import { getResolvedCandidatePhoto } from '../services/firebase';
 import { X, Vote, MapPin, CheckCircle2, User, MessageCircle, Twitter, Share2, Copy, Check, TrendingUp, Trophy } from 'lucide-react';
 
 interface CandidateProfileModalProps {
@@ -9,8 +10,6 @@ interface CandidateProfileModalProps {
   rank?: number;
   leaderVotes?: number;
 }
-
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
 export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
   candidate,
@@ -22,7 +21,7 @@ export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
   const [copied, setCopied] = useState(false);
   if (!candidate) return null;
   const votes = candidate.approvedVotes || 0;
-  const candidatePhoto = candidate.photoUrl || candidate.image || DEFAULT_AVATAR;
+  const candidatePhoto = getResolvedCandidatePhoto(candidate.photoUrl, candidate.image, candidate.id, candidate.name);
 
   const isLeader = leaderVotes > 0 && votes >= leaderVotes;
   const percentage = leaderVotes > 0 ? Math.min(100, Math.round((votes / leaderVotes) * 100)) : 0;
@@ -121,9 +120,9 @@ export const CandidateProfileModal: React.FC<CandidateProfileModalProps> = ({
         {/* Hero Portrait Container */}
         <div className="relative aspect-16/10 bg-slate-900 overflow-hidden flex items-center justify-center select-none">
           <img
-            src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+            src={candidatePhoto}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+              (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', candidate.id, candidate.name);
             }}
             alt={candidate.name}
             className="w-full h-full object-cover object-top"

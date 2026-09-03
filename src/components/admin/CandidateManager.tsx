@@ -10,6 +10,7 @@ import {
   reconcileVotesWithCloudAndServer,
 } from '../../services/api';
 import { compressImageFile, CompressionResult } from '../../utils/imageCompressor';
+import { getResolvedCandidatePhoto } from '../../services/firebase';
 import {
   Users,
   Plus,
@@ -60,6 +61,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
   const [sortOrder, setSortOrder] = useState<number>(1);
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [approvedVotesInput, setApprovedVotesInput] = useState<number>(0);
+  const [hasModifiedVotesInput, setHasModifiedVotesInput] = useState(false);
 
   // Card-level manual vote adjustment inputs & states
   const [candidateVoteInputs, setCandidateVoteInputs] = useState<Record<string, number | string>>({});
@@ -99,6 +101,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setSortOrder(candidates.length + 1);
     setStatus('ACTIVE');
     setApprovedVotesInput(0);
+    setHasModifiedVotesInput(false);
     setPhotoMode('upload');
     setCompressionInfo(null);
     setIsAddOpen(true);
@@ -125,6 +128,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
     setSortOrder(c.sortOrder || 1);
     setStatus(c.status);
     setApprovedVotesInput(c.approvedVotes || 0);
+    setHasModifiedVotesInput(false);
     setPhotoMode(existingPhoto.startsWith('http') && !existingPhoto.includes('/api/uploads') ? 'url' : 'upload');
     setCompressionInfo(null);
     setIsAddOpen(false);
@@ -306,7 +310,7 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
           status,
         };
 
-        if (approvedVotesInput !== undefined && approvedVotesInput !== null) {
+        if (hasModifiedVotesInput && approvedVotesInput !== undefined && approvedVotesInput !== null) {
           updatePayload.approvedVotes = Number(approvedVotesInput) || 0;
         }
 
@@ -607,11 +611,11 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                 {/* Photo Area */}
                 <div className="relative group shrink-0">
                   <img
-                    src={cand.photoUrl || cand.image || DEFAULT_AVATAR}
+                    src={getResolvedCandidatePhoto(cand.photoUrl, cand.image, cand.id, cand.name)}
                     alt={cand.name}
                     className="w-20 h-20 rounded-2xl object-cover border border-slate-200 shadow-xs"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                      (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', cand.id, cand.name);
                     }}
                   />
 
@@ -1116,7 +1120,10 @@ export const CandidateManager: React.FC<CandidateManagerProps> = ({
                     min="0"
                     step="1"
                     value={approvedVotesInput}
-                    onChange={(e) => setApprovedVotesInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    onChange={(e) => {
+                      setApprovedVotesInput(Math.max(0, parseInt(e.target.value, 10) || 0));
+                      setHasModifiedVotesInput(true);
+                    }}
                     className="w-full pl-16 pr-3.5 py-2.5 rounded-xl border border-amber-300 bg-white text-sm font-black text-blue-950 focus:border-amber-600 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-2xs"
                     placeholder="0"
                   />

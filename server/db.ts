@@ -341,6 +341,23 @@ class DatabaseService {
           });
         }
 
+        // Sanitize contestant photos so broken uploads or missing files never ruin candidate profile pictures
+        const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+        parsed.candidates.forEach((cand) => {
+          const img = cand.image ? cand.image.trim() : '';
+          const isLocalUpload = img.startsWith('/api/uploads') || img.startsWith('/uploads');
+          const isBrokenLocal = isLocalUpload && !fs.existsSync(path.join(UPLOADS_DIR, path.basename(img)));
+          if (!img || isBrokenLocal) {
+            if (cand.id === 'cand-01' || cand.slug === 'bro-david-okolo') {
+              cand.image = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80';
+            } else if (cand.id === 'cand-02' || cand.slug === 'bro-chiagozie-okafor') {
+              cand.image = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80';
+            } else if (cand.id === 'cand-1787690978676-1174' || cand.slug === 'mr-timothy-peter-cilo') {
+              cand.image = 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80';
+            }
+          }
+        });
+
         this.persistSync(parsed);
         return parsed;
       }
@@ -1217,7 +1234,7 @@ class DatabaseService {
       }
       if (updates.state !== undefined) this.data.candidates[idx].state = updates.state.trim();
       if (updates.biography !== undefined) this.data.candidates[idx].biography = updates.biography.trim();
-      if (updates.image !== undefined) this.data.candidates[idx].image = updates.image.trim();
+      if (updates.image !== undefined && updates.image.trim()) this.data.candidates[idx].image = updates.image.trim();
       if (updates.status !== undefined) this.data.candidates[idx].status = updates.status;
       if (typeof updates.sortOrder === 'number') this.data.candidates[idx].sortOrder = updates.sortOrder;
       if (typeof (updates as any).approvedVotes === 'number') {

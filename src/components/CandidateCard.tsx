@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Candidate } from '../types';
+import { getResolvedCandidatePhoto } from '../services/firebase';
 import { Vote, MapPin, CheckCircle2, Info, User, MessageCircle, Twitter, Share2, Copy, Check, TrendingUp, Trophy } from 'lucide-react';
 
 interface CandidateCardProps {
@@ -11,8 +12,6 @@ interface CandidateCardProps {
   leaderVotes?: number;
 }
 
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
-
 export const CandidateCard: React.FC<CandidateCardProps> = ({
   candidate,
   onVote,
@@ -22,7 +21,7 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const votes = candidate.approvedVotes || 0;
-  const candidatePhoto = candidate.photoUrl || candidate.image || DEFAULT_AVATAR;
+  const candidatePhoto = getResolvedCandidatePhoto(candidate.photoUrl, candidate.image, candidate.id, candidate.name);
 
   // Percentage relative to competition leader
   const isLeader = leaderVotes > 0 && votes >= leaderVotes;
@@ -139,9 +138,9 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
         onClick={() => onViewProfile(candidate)}
       >
         <img
-          src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+          src={candidatePhoto}
           onError={(e) => {
-            (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+            (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', candidate.id, candidate.name);
           }}
           alt={candidate.name}
           className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"

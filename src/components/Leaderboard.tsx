@@ -1,8 +1,7 @@
 import React from 'react';
 import { Candidate } from '../types';
+import { getResolvedCandidatePhoto } from '../services/firebase';
 import { Trophy, Medal, Crown, Vote, User, ShieldCheck } from 'lucide-react';
-
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
 interface LeaderboardProps {
   candidates: Candidate[];
@@ -113,10 +112,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
                   <div className="flex items-center gap-3.5 my-2">
                     <img
-                      src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+                      src={getResolvedCandidatePhoto(candidate.photoUrl, candidate.image, candidate.id, candidate.name)}
                       alt={candidate.name}
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                        (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', candidate.id, candidate.name);
                       }}
                       className="w-14 h-14 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
                     />
@@ -189,10 +188,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5 sm:gap-3">
                           <img
-                            src={candidate.photoUrl || candidate.image || DEFAULT_AVATAR}
+                            src={getResolvedCandidatePhoto(candidate.photoUrl, candidate.image, candidate.id, candidate.name)}
                             alt={candidate.name}
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                              (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', candidate.id, candidate.name);
                             }}
                             className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                           />

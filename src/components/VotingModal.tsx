@@ -26,8 +26,7 @@ import {
   FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+import { getResolvedCandidatePhoto } from '../services/firebase';
 
 interface VotingModalProps {
   isOpen?: boolean;
@@ -593,10 +592,10 @@ export const VotingModal: React.FC<VotingModalProps> = ({
                       }`}
                     >
                       <img
-                        src={cand.photoUrl || cand.image || DEFAULT_AVATAR}
+                        src={getResolvedCandidatePhoto(cand.photoUrl, cand.image, cand.id, cand.name)}
                         alt={cand.name}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                          (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', cand.id, cand.name);
                         }}
                         className="w-12 h-12 rounded-lg object-cover object-top border border-slate-200 shrink-0"
                       />
@@ -632,10 +631,10 @@ export const VotingModal: React.FC<VotingModalProps> = ({
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <img
-                    src={selectedCandidate.photoUrl || selectedCandidate.image || DEFAULT_AVATAR}
+                    src={getResolvedCandidatePhoto(selectedCandidate.photoUrl, selectedCandidate.image, selectedCandidate.id, selectedCandidate.name)}
                     alt={selectedCandidate.name}
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                      (e.target as HTMLImageElement).src = getResolvedCandidatePhoto('', '', selectedCandidate.id, selectedCandidate.name);
                     }}
                     className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
                   />
